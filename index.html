@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viyautepec 2a. Sección 2- Control de Accesos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React y Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            height: 100%; 
+            width: 100%; 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc;
+        }
+        #root { height: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        const { useState, useEffect, useRef, Fragment } = React;
+
+        // --- Configuración de Firebase ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+        const appId = window.__app_id || 'viyautepec-2a-seccion-prod';
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- Componente de Iconos SVG ---
+        const Icon = ({ name, className = "w-5 h-5" }) => {
+            const icons = {
+                shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+                user: (
+                    <Fragment>
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </Fragment>
+                ),
+                settings: (
+                    <Fragment>
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </Fragment>
+                ),
+                "shield-check": (
+                    <Fragment>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="m9 12 2 2 4-4"/>
+                    </Fragment>
+                ),
+                "shield-alert": (
+                    <Fragment>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </Fragment>
+                ),
+                "log-out": (
+                    <Fragment>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </Fragment>
+                ),
+                "clipboard-list": (
+                    <Fragment>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                        <line x1="12" y1="11" x2="16" y2="11"/>
+                        <line x1="12" y1="16" x2="16" y2="16"/>
+                        <circle cx="8" cy="11" r="0.5"/>
+                        <circle cx="8" cy="16" r="0.5"/>
+                    </Fragment>
+                ),
+                users: (
+                    <Fragment>
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </Fragment>
+                ),
+                x: <Fragment><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Fragment>,
+                lock: <Fragment><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Fragment>,
+                search: <Fragment><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></Fragment>,
+                camera: <Fragment><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Fragment>,
+                "check-circle": <Fragment><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Fragment>,
+                "x-circle": <Fragment><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Fragment>,
+                "loader-2": <path d="M21 12a9 9 0 1 1-6.21-8.58"/>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+
+        const getQRCode = (data) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data)}`;
+
+        // --- Componentes Compartidos ---
+
+        const TabButton = ({ active, onClick, icon, label, variant = "primary" }) => {
+            const activeStyles = variant === 'danger' ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-900 text-white shadow-lg';
+            return (
+                <button onClick={onClick} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${active ? activeStyles : 'bg-transparent text-slate-400 hover:bg-slate-100'}`}>
+                    <Icon name={icon} className="w-4 h-4" /> <span>{label}</span>
+                </button>
+            );
+        };
+
+        const DataTable = ({ headers, data }) => (
+            <div className="overflow-x-auto rounded-[1.5rem] border border-slate-200 bg-white">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50/50">
+                        <tr>{headers.map(h => <th key={h} className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100">{h}</th>)}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {data.map((row, i) => (
+                            <tr key={i} className="hover:bg-slate-50/30 transition-colors">
+                                {row.map((cell, j) => <td key={j} className="px-6 py-4 text-xs text-slate-700 font-medium">{cell}</td>)}
+                            </tr>
+                        ))}
+                        {data.length === 0 && (
+                            <tr><td colSpan={headers.length} className="px-6 py-16 text-center text-slate-400 italic uppercase text-[10px]">Sin registros</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        );
+
+        // --- Módulos ---
+
+        function AdminDashboard({ habitantes, logs, admins, agentes, adminData }) {
+            const [tab, setTab] = useState('residentes');
+            const [view, setView] = useState('list');
+            const [formData, setFormData] = useState({ nombre: '', casa: '', tipo: 'Propietario', password: '' });
+            const [guardFormData, setGuardFormData] = useState({ nombre: '', usuario: '', password: '' });
+
+            const saveHabitante = async (e) => {
+                e.preventDefault();
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'habitantes'), {
+                    ...formData,
+                    mustChangeCode: true,
+                    disponibleVisitas: true,
+                    codigoAcceso: `HAB-${Math.random().toString(36).substr(2, 4).toUpperCase()}`
+                });
+                alert(`Habitante guardado. Clave temporal: ${formData.password}`);
+                setFormData({ nombre: '', casa: '', tipo: 'Propietario', password: '' });
+                setView('list');
+            };
+
+            const saveAgente = async (e) => {
+                e.preventDefault();
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'agentes'), {
+                    ...guardFormData,
+                    mustChangeCode: true,
+                    activo: true,
+                    fechaAlta: new Date().toISOString()
+                });
+                alert(`Agente registrado. Usuario: ${guardFormData.usuario}. Clave temporal: ${guardFormData.password}`);
+                setGuardFormData({ nombre: '', usuario: '', password: '' });
+                setView('list');
+            };
+
+            return (
+                <div className="space-y-4 animate-in">
+                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-2">
+                        <TabButton active={tab === 'residentes'} onClick={() => {setTab('residentes'); setView('list');}} icon="users" label="Residentes" />
+                        <TabButton active={tab === 'agentes'} onClick={() => {setTab('agentes'); setView('list');}} icon="shield-check" label="Seguridad" />
+                        <TabButton active={tab === 'bitacora'} onClick={() => {setTab('bitacora'); setView('list');}} icon="clipboard-list" label="Bitácora" />
+                    </div>
+
+                    <div className="bg-white rounded-[2rem] shadow-xl p-6 border border-slate-200 min-h-[450px]">
+                        {tab === 'residentes' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-lg font-black uppercase text-slate-800 tracking-tight">Directorio</h2>
+                                    <button onClick={() => setView(view === 'list' ? 'add' : 'list')} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-blue-700 transition-colors">
+                                        {view === 'list' ? '+ Nuevo Hab.' : 'X Cerrar'}
+                                    </button>
+                                </div>
+                                {view === 'add' ? (
+                                    <form onSubmit={saveHabitante} className="max-w-md mx-auto space-y-4 py-4 animate-in">
+                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Nombre completo" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Lote / Casa" value={formData.casa} onChange={e => setFormData({...formData, casa: e.target.value})} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" value={formData.tipo} onChange={e => setFormData({...formData, tipo: e.target.value})}>
+                                                <option value="Propietario">Propietario</option>
+                                                <option value="Inquilino">Inquilino</option>
+                                            </select>
+                                            <input required type="text" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Clave Inicial" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                                        </div>
+                                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-black">Guardar en Base de Datos</button>
+                                    </form>
+                                ) : (
+                                    <DataTable 
+                                        headers={['Nombre', 'Casa', 'Estatus', 'Clave', 'Acción']} 
+                                        data={habitantes.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(h => [
+                                            <span className="uppercase">{h.nombre}</span>, 
+                                            <span className="font-mono font-bold text-blue-600">{h.casa}</span>, 
+                                            h.tipo, 
+                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black ${h.mustChangeCode ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{h.mustChangeCode ? 'PENDIENTE' : 'OK'}</span>, 
+                                            <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', h.id))} className="text-rose-400 hover:text-rose-600"><Icon name="x"/></button>
+                                        ])} 
+                                    />
+                                )}
+                            </div>
+                        )}
+
+                        {tab === 'agentes' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-lg font-black uppercase text-slate-800 tracking-tight">Cuerpo de Seguridad</h2>
+                                    <button onClick={() => setView(view === 'list' ? 'addGuard' : 'list')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">
+                                        {view === 'list' ? '+ Nuevo Agente' : 'X Cerrar'}
+                                    </button>
+                                </div>
+                                {view === 'addGuard' ? (
+                                    <form onSubmit={saveAgente} className="max-w-md mx-auto space-y-4 py-4 animate-in">
+                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Nombre del guardia" value={guardFormData.nombre} onChange={e => setGuardFormData({...guardFormData, nombre: e.target.value})} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="ID Usuario" value={guardFormData.usuario} onChange={e => setGuardFormData({...guardFormData, usuario: e.target.value})} />
+                                            <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Clave Inicial" value={guardFormData.password} onChange={e => setGuardFormData({...guardFormData, password: e.target.value})} />
+                                        </div>
+                                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-black">Registrar en Sistema</button>
+                                    </form>
+                                ) : (
+                                    <DataTable 
+                                        headers={['Nombre Agente', 'ID Usuario', 'Cambio Clave', 'X']} 
+                                        data={agentes.map(a => [
+                                            <span className="uppercase">{a.nombre}</span>, 
+                                            <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold">@{a.usuario}</code>, 
+                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black ${a.mustChangeCode ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{a.mustChangeCode ? 'PENDIENTE' : 'LISTO'}</span>, 
+                                            <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agentes', a.id))} className="text-rose-400"><Icon name="x"/></button>
+                                        ])} 
+                                    />
+                                )}
+                            </div>
+                        )}
+
+                        {tab === 'bitacora' && (
+                            <DataTable 
+                                headers={['Fecha/Hora', 'Tipo', 'Involucrado', 'Lote']}
+                                data={logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 30).map(l => [
+                                    <span className="text-[10px] text-slate-400 font-bold">{new Date(l.timestamp).toLocaleString()}</span>,
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${l.tipo === 'Visita' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>{l.subtipo || l.tipo}</span>,
+                                    <span className="uppercase font-bold">{l.tipo === 'Visita' ? l.visitante : l.habitanteNombre}</span>,
+                                    <span className="font-black text-blue-600 uppercase">{l.casa}</span>
+                                ])}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function ChangeCodeView({ title, onSubmit }) {
+            const [code, setCode] = useState("");
+            const [confirm, setConfirm] = useState("");
+            const handleSub = (e) => {
+                e.preventDefault();
+                if (code.length < 4) return alert("Mínimo 4 caracteres.");
+                if (code !== confirm) return alert("Los códigos no coinciden.");
+                onSubmit(code);
+            };
+            return (
+                <div className="max-w-md mx-auto bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-200 text-center animate-in mt-10">
+                    <div className="w-16 h-16 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl"><Icon name="lock" /></div>
+                    <h2 className="text-xl font-black text-slate-900 uppercase leading-none mb-3">{title}</h2>
+                    <p className="text-slate-400 text-[10px] font-bold mb-8 uppercase tracking-widest leading-relaxed">Ha ingresado con un código administrativo. Por favor, asigne su clave personal definitiva.</p>
+                    <form onSubmit={handleSub} className="space-y-4">
+                        <input type="password" placeholder="Nueva Clave" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={code} onChange={e => setCode(e.target.value)} required />
+                        <input type="password" placeholder="Confirmar Nueva Clave" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Actualizar mi Código</button>
+                    </form>
+                </div>
+            );
+        }
+
+        function HabitanteModule({ habitante }) {
+            const [updating, setUpdating] = useState(false);
+            const qrFullContent = `VIYAUTEPEC 2a. SECCIÓN\nRESIDENTE: ${habitante.nombre.toUpperCase()}\nCASA: ${habitante.casa.toUpperCase()}\nID: ${habitante.codigoAcceso}`;
+            const toggleVisitas = async () => {
+                setUpdating(true);
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', habitante.id), { disponibleVisitas: !habitante.disponibleVisitas });
+                } catch (e) { console.error(e); }
+                setUpdating(false);
+            };
+            return (
+                <div className="max-w-md mx-auto space-y-6 animate-in py-4">
+                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl text-center border border-slate-100 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 shadow-xl"></div>
+                        <h2 className="text-xl font-black text-slate-900 mb-8 uppercase tracking-tighter leading-none mt-2">Viyautepec 2a. Sección<br/><span className="text-blue-500 text-[10px] tracking-widest">Pase Residencial</span></h2>
+                        <div className="bg-white p-4 rounded-[3rem] inline-block border-8 border-slate-50 shadow-inner mb-8">
+                            <img src={getQRCode(qrFullContent)} alt="QR" className="w-56 h-56 mx-auto" />
+                            <p className="mt-4 font-black text-blue-600 text-lg uppercase tracking-widest leading-none">{habitante.codigoAcceso}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 text-left">
+                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 tracking-widest">Titular</span>
+                                <p className="font-black text-slate-900 text-[10px] uppercase truncate leading-tight">{habitante.nombre}</p>
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 text-left">
+                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 tracking-widest">Dirección</span>
+                                <p className="font-black text-slate-900 text-[10px] uppercase leading-tight truncate">{habitante.casa}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className={`p-6 rounded-[2.5rem] shadow-xl border-2 transition-all flex items-center justify-between ${habitante.disponibleVisitas ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                        <div className="flex items-center gap-4">
+                            <div className={`p-4 rounded-2xl shadow-lg ${habitante.disponibleVisitas ? 'bg-emerald-500' : 'bg-rose-500'} text-white`}>
+                                <Icon name={habitante.disponibleVisitas ? "check-circle" : "x-circle"} />
+                            </div>
+                            <div>
+                                <h3 className={`text-base font-black uppercase leading-none ${habitante.disponibleVisitas ? 'text-emerald-950' : 'text-rose-950'}`}>{habitante.disponibleVisitas ? 'Visitas OK' : 'Cerrado'}</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">Acceso en portería</p>
+                            </div>
+                        </div>
+                        <button disabled={updating} onClick={toggleVisitas} className={`relative w-16 h-8 rounded-full transition-colors flex items-center px-1 shadow-inner ${habitante.disponibleVisitas ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+                            <div className={`w-6 h-6 bg-white rounded-full shadow-lg transition-transform ${habitante.disponibleVisitas ? 'translate-x-8' : 'translate-x-0'} flex items-center justify-center`}>
+                                {updating && <Icon name="loader-2" className="w-3 h-3 animate-spin text-slate-400" />}
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        function GuardiaModule({ habitantes, user, agente }) {
+            const [search, setSearch] = useState("");
+            const [selected, setSelected] = useState(null);
+            const [vName, setVName] = useState("");
+            const filtered = search.trim().length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
+
+            const handleVisit = async () => {
+                if (!vName.trim()) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bitacora'), {
+                        tipo: 'Visita', subtipo: 'Entrada', visitante: vName.toUpperCase(), habitanteId: selected.id, habitanteNombre: selected.nombre, casa: selected.casa, agenteNombre: agente.nombre, timestamp: new Date().toISOString()
+                    });
+                    alert("ACCESO REGISTRADO."); setSelected(null); setVName("");
+                } catch (e) { alert("Error."); }
+            };
+
+            const registerMove = async (h, type) => {
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bitacora'), {
+                        tipo: 'Residente', subtipo: type, habitanteId: h.id, habitanteNombre: h.nombre, casa: h.casa, agenteNombre: agente.nombre, timestamp: new Date().toISOString()
+                    });
+                    alert(`${type.toUpperCase()} REGISTRADA PARA ${h.nombre.toUpperCase()}`);
+                } catch (e) { alert("Error."); }
+            };
+
+            return (
+                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-in">
+                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-200 flex items-center gap-4 focus-within:ring-8 focus:ring-blue-100 transition-all group">
+                        <Icon name="search" className="text-slate-300 w-8 h-8 group-focus-within:text-blue-500 transition-colors" />
+                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar por nombre o casa..." value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filtered.map(h => (
+                            <div key={h.id} className="bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100 flex flex-col gap-4 group hover:border-blue-300 transition-all">
+                                <div className="flex justify-between items-start">
+                                    <div className="space-y-1">
+                                        <h4 className="font-black text-slate-900 uppercase text-xs leading-tight group-hover:text-blue-600 truncate w-32">{h.nombre}</h4>
+                                        <p className="text-[9px] font-black text-slate-400 tracking-widest uppercase leading-none">CASA: {h.casa}</p>
+                                    </div>
+                                    <div className={`px-2.5 py-1.5 rounded-xl text-[8px] font-black uppercase shadow-sm ${h.disponibleVisitas ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                        {h.disponibleVisitas ? 'RECEP' : 'BLOQ'}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => registerMove(h, 'Entrada')} className="flex-1 py-3 bg-slate-50 text-slate-700 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">Ingreso</button>
+                                    <button onClick={() => registerMove(h, 'Salida')} className="flex-1 py-3 bg-slate-50 text-slate-700 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">Salida</button>
+                                </div>
+                                <button disabled={!h.disponibleVisitas} onClick={() => setSelected(h)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-blue-100 disabled:opacity-20 transition-all hover:bg-blue-700">Registrar Visita</button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {selected && (
+                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md">
+                            <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-6 animate-in shadow-2xl relative overflow-hidden text-center">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
+                                <h3 className="text-xl font-black text-slate-900 uppercase">Nueva Visita</h3>
+                                <div className="p-6 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                                    <p className="text-xl font-black text-slate-800 uppercase leading-none mb-1">{selected.nombre}</p>
+                                    <p className="text-blue-600 font-black text-[10px] uppercase tracking-widest leading-none tracking-widest">CASA: {selected.casa}</p>
+                                </div>
+                                <input autoFocus className="w-full p-4.5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-sm focus:ring-8 focus:ring-blue-100" placeholder="Nombre completo del visitante..." value={vName} onChange={e => setVName(e.target.value)} />
+                                <div className="flex gap-3 pt-2">
+                                    <button onClick={() => setSelected(null)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
+                                    <button disabled={!vName.trim()} onClick={handleVisit} className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-black shadow-2xl uppercase text-[10px] hover:bg-black">Finalizar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- Aplicación Principal ---
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [role, setRole] = useState(null); 
+            const [adminData, setAdminData] = useState(null);
+            const [guardData, setGuardData] = useState(null);
+            const [currentHabitante, setCurrentHabitante] = useState(null);
+            const [habitantes, setHabitantes] = useState([]);
+            const [admins, setAdmins] = useState([]);
+            const [agentes, setAgentes] = useState([]);
+            const [logs, setLogs] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [dataLoaded, setDataLoaded] = useState(false);
+
+            useEffect(() => {
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (e) { console.error(e); }
+                };
+                initAuth();
+                onAuthStateChanged(auth, (u) => { 
+                    setUser(u); 
+                    if(u) setLoading(false); 
+                });
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const habRef = collection(db, 'artifacts', appId, 'public', 'data', 'habitantes');
+                const logRef = collection(db, 'artifacts', appId, 'public', 'data', 'bitacora');
+                const admRef = collection(db, 'artifacts', appId, 'public', 'data', 'admins');
+                const ageRef = collection(db, 'artifacts', appId, 'public', 'data', 'agentes');
+
+                onSnapshot(habRef, (s) => setHabitantes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                onSnapshot(logRef, (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                onSnapshot(ageRef, (s) => setAgentes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                onSnapshot(admRef, (s) => {
+                    const docs = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setAdmins(docs);
+                    setDataLoaded(true);
+                    if (docs.length === 0) {
+                        addDoc(admRef, { nombre: 'Administrador Maestro', usuario: 'admin', password: '123', esSuperuser: true, fechaCreado: new Date().toISOString() });
+                    }
+                });
+            }, [user]);
+
+            const LoginScreen = ({ onSelect }) => {
+                const [mode, setMode] = useState(null); 
+                const [userInput, setUserInput] = useState("");
+                const [passInput, setPassInput] = useState("");
+
+                const handleLogin = (e) => {
+                    e.preventDefault();
+                    let found = null;
+                    if (mode === 'admin') found = admins.find(a => a.usuario === userInput && a.password === passInput);
+                    if (mode === 'guardia') found = agentes.find(a => a.usuario === userInput && a.password === passInput);
+                    if (mode === 'habitante') found = habitantes.find(h => h.id === userInput && h.password === passInput);
+
+                    if (found) onSelect(mode, found); else alert("Credenciales incorrectas.");
+                };
+
+                if (mode) return (
+                    <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-full overflow-hidden">
+                        <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm border border-slate-100 text-center animate-in">
+                            <div className={`w-14 h-14 rounded-3xl flex items-center justify-center mx-auto mb-6 text-white shadow-xl ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                                <Icon name={mode === 'admin' ? "shield-alert" : mode === 'guardia' ? "shield-check" : "user"} />
+                            </div>
+                            <h2 className="text-xl font-black uppercase mb-6 tracking-tight leading-none tracking-widest">Acceso {mode}</h2>
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                {mode === 'habitante' ? (
+                                    <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" value={userInput} onChange={e => setUserInput(e.target.value)} required>
+                                        <option value="">Buscar Nombre...</option>
+                                        {habitantes.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
+                                    </select>
+                                ) : (
+                                    <input className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" placeholder="ID Usuario" value={userInput} onChange={e => setUserInput(e.target.value)} required />
+                                )}
+                                <input type="password" placeholder="Código / Password" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" value={passInput} onChange={e => setPassInput(e.target.value)} required />
+                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Entrar</button>
+                                <button type="button" onClick={() => {setMode(null); setUserInput(""); setPassInput("");}} className="w-full text-slate-400 text-[10px] font-black uppercase pt-2 hover:text-slate-700 transition-colors underline decoration-2 decoration-slate-200">Volver</button>
+                            </form>
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center p-4 bg-slate-50 h-full space-y-12 animate-in overflow-hidden">
+                        <div className="text-center space-y-2">
+                            <div className="inline-block bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] mb-4">Seguridad Privada</div>
+                            <h1 className="text-5xl md:text-6xl font-black text-slate-950 tracking-tighter uppercase leading-none">VIYAUTEPEC 2A. SECCIÓN</h1>
+                            <p className="text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.4em] opacity-80 mt-2 tracking-tighter leading-none">Gestión Integral de Vigilancia y Accesos</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl px-4">
+                            <RoleCard icon={<Icon name="settings" className="w-8 h-8" />} title="Administración" desc="Cuentas y Directorio" color="bg-slate-900" onClick={() => setMode('admin')} />
+                            <RoleCard icon={<Icon name="user" className="w-8 h-8" />} title="Residente" desc="Pase QR y Visitas" color="bg-blue-600" onClick={() => setMode('habitante')} />
+                            <RoleCard icon={<Icon name="shield-check" className="w-8 h-8" />} title="Seguridad" desc="Control de Accesos" color="bg-emerald-600" onClick={() => setMode('guardia')} />
+                        </div>
+                    </div>
+                );
+            };
+
+            const RoleCard = ({ icon, title, desc, color, onClick }) => (
+                <button onClick={onClick} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-5 hover:scale-105 transition-all group active:scale-95 shadow-slate-200/50">
+                    <div className={`p-5 rounded-3xl ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}>{icon}</div>
+                    <div className="space-y-1">
+                        <h3 className="text-base font-black text-slate-900 uppercase leading-none tracking-tight leading-none">{title}</h3>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none opacity-60 mt-1">{desc}</p>
+                    </div>
+                </button>
+            );
+
+            if (loading) return (
+                <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6 text-center">
+                    <Icon name="loader-2" className="w-10 h-10 animate-spin text-blue-500 mb-6" />
+                    <h2 className="text-xl font-black tracking-widest uppercase mb-1">VIYAUTEPEC</h2>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] animate-pulse">Sincronizando con Portería...</p>
+                </div>
+            );
+
+            return (
+                <div className="h-screen flex flex-col overflow-hidden">
+                    {role && (
+                        <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-xl shrink-0 z-[100] border-b border-slate-800">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20"><Icon name="shield" className="w-5 h-5"/></div>
+                                <div className="flex flex-col">
+                                    <span className="font-black text-sm leading-none uppercase tracking-tight leading-none">VIYAUTEPEC</span>
+                                    <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest leading-none mt-0.5">2a. Sección</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="hidden md:flex flex-col items-end mr-2">
+                                    <span className="font-bold text-[9px] text-slate-400 uppercase tracking-widest leading-none mb-1">Operador Activo</span>
+                                    <span className="font-bold text-[10px] text-slate-200 uppercase truncate max-w-[150px]">{role === 'habitante' ? currentHabitante?.nombre : (role === 'guardia' ? guardData?.nombre : adminData?.nombre)}</span>
+                                </div>
+                                <button onClick={() => {setRole(null); setAdminData(null); setGuardData(null); setCurrentHabitante(null);}} className="px-3 py-2 bg-slate-800 hover:bg-rose-600 text-white rounded-xl transition-all font-bold text-[9px] uppercase border border-slate-700 active:scale-95">Salir</button>
+                            </div>
+                        </header>
+                    )}
+
+                    <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+                        {!role ? (
+                            <LoginScreen onSelect={(r, d) => {
+                                setRole(r); 
+                                if(r==='admin') setAdminData(d);
+                                if(r==='habitante') setCurrentHabitante(d);
+                                if(r==='guardia') setGuardData(d);
+                            }} />
+                        ) : (
+                            <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full custom-scrollbar">
+                                {role === 'admin' && <AdminDashboard habitantes={habitantes} logs={logs} admins={admins} agentes={agentes} adminData={adminData} />}
+                                {role === 'habitante' && (
+                                    currentHabitante.mustChangeCode ? (
+                                        <ChangeCodeView title="Actualizar Clave Residente" onSubmit={async (pass) => {
+                                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', currentHabitante.id), { password: pass, mustChangeCode: false });
+                                            setCurrentHabitante({...currentHabitante, mustChangeCode: false});
+                                        }} />
+                                    ) : <HabitanteModule habitante={habitantes.find(h => h.id === currentHabitante.id) || currentHabitante} />
+                                )}
+                                {role === 'guardia' && (
+                                    guardData.mustChangeCode ? (
+                                        <ChangeCodeView title="Actualizar Clave Personal" onSubmit={async (pass) => {
+                                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agentes', guardData.id), { password: pass, mustChangeCode: false });
+                                            setGuardData({...guardData, mustChangeCode: false});
+                                        }} />
+                                    ) : <GuardiaModule habitantes={habitantes} user={user} agente={guardData} />
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
