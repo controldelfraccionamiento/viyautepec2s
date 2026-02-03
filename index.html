@@ -3,110 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Viyautepec 2a. Sección 2- Control de Accesos</title>
+    <title>Viyautepec 2a. Sección - Control de Accesos</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React y Babel -->
+    <!-- React y Babel Standalone -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDK Compat Mode (Evita errores de Babel esmodules) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body, html { 
-            margin: 0; 
-            padding: 0; 
-            height: 100%; 
-            width: 100%; 
-            font-family: 'Inter', sans-serif; 
-            background-color: #f8fafc;
+            margin: 0; padding: 0; height: 100vh; width: 100vw; 
+            font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow: hidden; 
         }
-        #root { height: 100%; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        #root { height: 100%; display: flex; flex-direction: column; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+        .animate-fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Marco guía para el escáner de credencial */
+        .scanner-guide {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 85%; height: 55%; border: 4px solid #3b82f6; border-radius: 24px;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.75); z-index: 10;
+        }
+
+        /* Estilos de impresión para la bitácora */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 2cm; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-        const { useState, useEffect, useRef, Fragment } = React;
+    <script type="text/babel">
+        const { useState, useEffect, Fragment, useRef } = React;
 
         // --- Configuración de Firebase ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCu2kV9s9ZCmQCFElHZaf7vXPUKStVAh9o",
+            authDomain: "viyautepec2seccion.firebaseapp.com",
+            projectId: "viyautepec2seccion",
+            storageBucket: "viyautepec2seccion.firebasestorage.app",
+            messagingSenderId: "1008154187449",
+            appId: "1:1008154187449:web:669811e04babbbfb986d68",
+            measurementId: "G-D828S2ZK3H"
+        };
 
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-        const appId = window.__app_id || 'viyautepec-2a-seccion-prod';
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const appId = "viyautepec2seccion";
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        // --- Utilidades ---
+        const getClavePersonalizada = (nombre, casa) => {
+            if (!nombre || !casa) return "RES-XXXX";
+            const cleanName = nombre.trim().split(/\s+/);
+            const n = (cleanName[0] || "XX").slice(0, 2).toUpperCase();
+            const a = (cleanName[1] || cleanName[0].slice(2, 4) || "XX").slice(0, 2).toUpperCase();
+            
+            const cleanCasa = casa.trim().split(/\s+/);
+            const c = (cleanCasa[0] || "XX").slice(0, 2).toUpperCase();
+            
+            const matchNum = casa.match(/\d+/);
+            const num = matchNum ? matchNum[0].padStart(2, '0').slice(-2) : "00";
+            
+            return `RES-${n}${a}${c}${num}`;
+        };
+
+        const getQRURL = (data) => `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(data)}`;
 
         // --- Componente de Iconos SVG ---
         const Icon = ({ name, className = "w-5 h-5" }) => {
             const icons = {
                 shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
-                user: (
-                    <Fragment>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                    </Fragment>
-                ),
-                settings: (
-                    <Fragment>
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                    </Fragment>
-                ),
-                "shield-check": (
-                    <Fragment>
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        <path d="m9 12 2 2 4-4"/>
-                    </Fragment>
-                ),
-                "shield-alert": (
-                    <Fragment>
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        <line x1="12" y1="8" x2="12" y2="12"/>
-                        <line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </Fragment>
-                ),
-                "log-out": (
-                    <Fragment>
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/>
-                        <line x1="21" y1="12" x2="9" y2="12"/>
-                    </Fragment>
-                ),
-                "clipboard-list": (
-                    <Fragment>
-                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                        <line x1="12" y1="11" x2="16" y2="11"/>
-                        <line x1="12" y1="16" x2="16" y2="16"/>
-                        <circle cx="8" cy="11" r="0.5"/>
-                        <circle cx="8" cy="16" r="0.5"/>
-                    </Fragment>
-                ),
-                users: (
-                    <Fragment>
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </Fragment>
-                ),
-                x: <Fragment><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Fragment>,
-                lock: <Fragment><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Fragment>,
-                search: <Fragment><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></Fragment>,
+                user: <Fragment><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Fragment>,
+                settings: <Fragment><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Fragment>,
                 camera: <Fragment><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Fragment>,
+                printer: <Fragment><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Fragment>,
+                "arrow-left": <Fragment><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></Fragment>,
                 "check-circle": <Fragment><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Fragment>,
                 "x-circle": <Fragment><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Fragment>,
-                "loader-2": <path d="M21 12a9 9 0 1 1-6.21-8.58"/>
+                "loader-2": <path d="M21 12a9 9 0 1 1-6.21-8.58"/>,
+                x: <Fragment><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Fragment>,
+                image: <Fragment><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Fragment>,
+                key: <Fragment><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></Fragment>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -115,305 +108,123 @@
             );
         };
 
-        const getQRCode = (data) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data)}`;
-
-        // --- Componentes Compartidos ---
-
-        const TabButton = ({ active, onClick, icon, label, variant = "primary" }) => {
-            const activeStyles = variant === 'danger' ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-900 text-white shadow-lg';
-            return (
-                <button onClick={onClick} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${active ? activeStyles : 'bg-transparent text-slate-400 hover:bg-slate-100'}`}>
-                    <Icon name={icon} className="w-4 h-4" /> <span>{label}</span>
-                </button>
-            );
-        };
-
-        const DataTable = ({ headers, data }) => (
-            <div className="overflow-x-auto rounded-[1.5rem] border border-slate-200 bg-white">
-                <table className="w-full text-left">
-                    <thead className="bg-slate-50/50">
-                        <tr>{headers.map(h => <th key={h} className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100">{h}</th>)}</tr>
+        // --- Componente: Tabla Genérica ---
+        const DataTable = ({ headers, rows }) => (
+            <div className="overflow-x-auto rounded-3xl border border-slate-100">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                        <tr>{headers.map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {data.map((row, i) => (
-                            <tr key={i} className="hover:bg-slate-50/30 transition-colors">
-                                {row.map((cell, j) => <td key={j} className="px-6 py-4 text-xs text-slate-700 font-medium">{cell}</td>)}
+                        {rows.map((row, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                {row.map((cell, j) => <td key={j} className="px-6 py-4 font-bold text-slate-700">{cell}</td>)}
                             </tr>
                         ))}
-                        {data.length === 0 && (
-                            <tr><td colSpan={headers.length} className="px-6 py-16 text-center text-slate-400 italic uppercase text-[10px]">Sin registros</td></tr>
+                        {rows.length === 0 && (
+                            <tr><td colSpan={headers.length} className="px-6 py-12 text-center text-slate-300 italic">Sin registros disponibles</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
         );
 
-        // --- Módulos ---
-
-        function AdminDashboard({ habitantes, logs, admins, agentes, adminData }) {
+        // --- Vista: Administración ---
+        function AdminView({ habitantes, agentes, logs, admins, role }) {
             const [tab, setTab] = useState('residentes');
-            const [view, setView] = useState('list');
-            const [formData, setFormData] = useState({ nombre: '', casa: '', tipo: 'Propietario', password: '' });
-            const [guardFormData, setGuardFormData] = useState({ nombre: '', usuario: '', password: '' });
+            const [selectedPhoto, setSelectedPhoto] = useState(null);
 
-            const saveHabitante = async (e) => {
-                e.preventDefault();
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'habitantes'), {
-                    ...formData,
-                    mustChangeCode: true,
-                    disponibleVisitas: true,
-                    codigoAcceso: `HAB-${Math.random().toString(36).substr(2, 4).toUpperCase()}`
-                });
-                alert(`Habitante guardado. Clave temporal: ${formData.password}`);
-                setFormData({ nombre: '', casa: '', tipo: 'Propietario', password: '' });
-                setView('list');
+            const deleteEntry = async (col, id) => {
+                if(confirm("¿Seguro que desea eliminar este registro?")) {
+                    await db.doc(`artifacts/${appId}/public/data/${col}/${id}`).delete();
+                }
             };
 
-            const saveAgente = async (e) => {
-                e.preventDefault();
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'agentes'), {
-                    ...guardFormData,
-                    mustChangeCode: true,
-                    activo: true,
-                    fechaAlta: new Date().toISOString()
-                });
-                alert(`Agente registrado. Usuario: ${guardFormData.usuario}. Clave temporal: ${guardFormData.password}`);
-                setGuardFormData({ nombre: '', usuario: '', password: '' });
-                setView('list');
-            };
+            const tabs = ['residentes', 'agentes', 'bitacora'];
+            if (role === 'superuser') tabs.push('administradores');
 
             return (
-                <div className="space-y-4 animate-in">
-                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-2">
-                        <TabButton active={tab === 'residentes'} onClick={() => {setTab('residentes'); setView('list');}} icon="users" label="Residentes" />
-                        <TabButton active={tab === 'agentes'} onClick={() => {setTab('agentes'); setView('list');}} icon="shield-check" label="Seguridad" />
-                        <TabButton active={tab === 'bitacora'} onClick={() => {setTab('bitacora'); setView('list');}} icon="clipboard-list" label="Bitácora" />
+                <div className="space-y-4 animate-fade-in pb-20">
+                    <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-fit overflow-x-auto max-w-full no-print">
+                        {tabs.map(t => (
+                            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>{t}</button>
+                        ))}
                     </div>
 
-                    <div className="bg-white rounded-[2rem] shadow-xl p-6 border border-slate-200 min-h-[450px]">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 min-h-[400px]">
                         {tab === 'residentes' && (
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-lg font-black uppercase text-slate-800 tracking-tight">Directorio</h2>
-                                    <button onClick={() => setView(view === 'list' ? 'add' : 'list')} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-blue-700 transition-colors">
-                                        {view === 'list' ? '+ Nuevo Hab.' : 'X Cerrar'}
-                                    </button>
-                                </div>
-                                {view === 'add' ? (
-                                    <form onSubmit={saveHabitante} className="max-w-md mx-auto space-y-4 py-4 animate-in">
-                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Nombre completo" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
-                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Lote / Casa" value={formData.casa} onChange={e => setFormData({...formData, casa: e.target.value})} />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" value={formData.tipo} onChange={e => setFormData({...formData, tipo: e.target.value})}>
-                                                <option value="Propietario">Propietario</option>
-                                                <option value="Inquilino">Inquilino</option>
-                                            </select>
-                                            <input required type="text" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Clave Inicial" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                                        </div>
-                                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-black">Guardar en Base de Datos</button>
-                                    </form>
-                                ) : (
-                                    <DataTable 
-                                        headers={['Nombre', 'Casa', 'Estatus', 'Clave', 'Acción']} 
-                                        data={habitantes.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(h => [
-                                            <span className="uppercase">{h.nombre}</span>, 
-                                            <span className="font-mono font-bold text-blue-600">{h.casa}</span>, 
-                                            h.tipo, 
-                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black ${h.mustChangeCode ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{h.mustChangeCode ? 'PENDIENTE' : 'OK'}</span>, 
-                                            <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', h.id))} className="text-rose-400 hover:text-rose-600"><Icon name="x"/></button>
-                                        ])} 
-                                    />
-                                )}
+                                <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight">Directorio Habitantes</h2>
+                                <DataTable 
+                                    headers={['Nombre', 'Lote', 'Acción']} 
+                                    rows={habitantes.map(h => [h.nombre, h.casa, <button onClick={() => deleteEntry('habitantes', h.id)} className="text-rose-500 font-black">Borrar</button>])}
+                                />
                             </div>
                         )}
 
                         {tab === 'agentes' && (
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-lg font-black uppercase text-slate-800 tracking-tight">Cuerpo de Seguridad</h2>
-                                    <button onClick={() => setView(view === 'list' ? 'addGuard' : 'list')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">
-                                        {view === 'list' ? '+ Nuevo Agente' : 'X Cerrar'}
-                                    </button>
-                                </div>
-                                {view === 'addGuard' ? (
-                                    <form onSubmit={saveAgente} className="max-w-md mx-auto space-y-4 py-4 animate-in">
-                                        <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Nombre del guardia" value={guardFormData.nombre} onChange={e => setGuardFormData({...guardFormData, nombre: e.target.value})} />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="ID Usuario" value={guardFormData.usuario} onChange={e => setGuardFormData({...guardFormData, usuario: e.target.value})} />
-                                            <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-xs" placeholder="Clave Inicial" value={guardFormData.password} onChange={e => setGuardFormData({...guardFormData, password: e.target.value})} />
-                                        </div>
-                                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-black">Registrar en Sistema</button>
-                                    </form>
-                                ) : (
-                                    <DataTable 
-                                        headers={['Nombre Agente', 'ID Usuario', 'Cambio Clave', 'X']} 
-                                        data={agentes.map(a => [
-                                            <span className="uppercase">{a.nombre}</span>, 
-                                            <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold">@{a.usuario}</code>, 
-                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black ${a.mustChangeCode ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{a.mustChangeCode ? 'PENDIENTE' : 'LISTO'}</span>, 
-                                            <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agentes', a.id))} className="text-rose-400"><Icon name="x"/></button>
-                                        ])} 
-                                    />
-                                )}
+                                <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight">Cuerpo de Seguridad</h2>
+                                <DataTable 
+                                    headers={['Agente', 'Usuario', 'Acción']} 
+                                    rows={agentes.map(a => [a.nombre, `@${a.usuario}`, <button onClick={() => deleteEntry('agentes', a.id)} className="text-rose-500 font-black">Borrar</button>])}
+                                />
+                            </div>
+                        )}
+
+                        {tab === 'administradores' && role === 'superuser' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight">Gestión de Admins</h2>
+                                <DataTable 
+                                    headers={['Nombre', 'Usuario', 'Acción']} 
+                                    rows={admins.map(a => [a.nombre, `@${a.usuario}`, <button onClick={() => deleteEntry('admins', a.id)} className="text-rose-500 font-black">Borrar</button>])}
+                                />
                             </div>
                         )}
 
                         {tab === 'bitacora' && (
-                            <DataTable 
-                                headers={['Fecha/Hora', 'Tipo', 'Involucrado', 'Lote']}
-                                data={logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 30).map(l => [
-                                    <span className="text-[10px] text-slate-400 font-bold">{new Date(l.timestamp).toLocaleString()}</span>,
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${l.tipo === 'Visita' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>{l.subtipo || l.tipo}</span>,
-                                    <span className="uppercase font-bold">{l.tipo === 'Visita' ? l.visitante : l.habitanteNombre}</span>,
-                                    <span className="font-black text-blue-600 uppercase">{l.casa}</span>
-                                ])}
-                            />
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight">Bitácora de Accesos</h2>
+                                <div className="overflow-x-auto rounded-3xl border border-slate-100">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-50">
+                                            <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Fecha/Hora</th><th>Sujeto</th><th className="text-center">INE</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {logs.sort((a,b)=>b.timestamp.localeCompare(a.timestamp)).map(l => (
+                                                <tr key={l.id} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-6 py-4 text-slate-400">{new Date(l.timestamp).toLocaleString()}</td>
+                                                    <td className="uppercase font-black text-slate-700">{l.visitante || l.habitanteNombre}<br/><span className="text-[9px] opacity-60 text-blue-600 font-black">{l.tipo}</span></td>
+                                                    <td className="text-center">
+                                                        {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-100 transition-all"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 font-black">N/A</span>}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         )}
                     </div>
-                </div>
-            );
-        }
 
-        function ChangeCodeView({ title, onSubmit }) {
-            const [code, setCode] = useState("");
-            const [confirm, setConfirm] = useState("");
-            const handleSub = (e) => {
-                e.preventDefault();
-                if (code.length < 4) return alert("Mínimo 4 caracteres.");
-                if (code !== confirm) return alert("Los códigos no coinciden.");
-                onSubmit(code);
-            };
-            return (
-                <div className="max-w-md mx-auto bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-200 text-center animate-in mt-10">
-                    <div className="w-16 h-16 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl"><Icon name="lock" /></div>
-                    <h2 className="text-xl font-black text-slate-900 uppercase leading-none mb-3">{title}</h2>
-                    <p className="text-slate-400 text-[10px] font-bold mb-8 uppercase tracking-widest leading-relaxed">Ha ingresado con un código administrativo. Por favor, asigne su clave personal definitiva.</p>
-                    <form onSubmit={handleSub} className="space-y-4">
-                        <input type="password" placeholder="Nueva Clave" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={code} onChange={e => setCode(e.target.value)} required />
-                        <input type="password" placeholder="Confirmar Nueva Clave" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={confirm} onChange={e => setConfirm(e.target.value)} required />
-                        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Actualizar mi Código</button>
-                    </form>
-                </div>
-            );
-        }
-
-        function HabitanteModule({ habitante }) {
-            const [updating, setUpdating] = useState(false);
-            const qrFullContent = `VIYAUTEPEC 2a. SECCIÓN\nRESIDENTE: ${habitante.nombre.toUpperCase()}\nCASA: ${habitante.casa.toUpperCase()}\nID: ${habitante.codigoAcceso}`;
-            const toggleVisitas = async () => {
-                setUpdating(true);
-                try {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', habitante.id), { disponibleVisitas: !habitante.disponibleVisitas });
-                } catch (e) { console.error(e); }
-                setUpdating(false);
-            };
-            return (
-                <div className="max-w-md mx-auto space-y-6 animate-in py-4">
-                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl text-center border border-slate-100 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 shadow-xl"></div>
-                        <h2 className="text-xl font-black text-slate-900 mb-8 uppercase tracking-tighter leading-none mt-2">Viyautepec 2a. Sección<br/><span className="text-blue-500 text-[10px] tracking-widest">Pase Residencial</span></h2>
-                        <div className="bg-white p-4 rounded-[3rem] inline-block border-8 border-slate-50 shadow-inner mb-8">
-                            <img src={getQRCode(qrFullContent)} alt="QR" className="w-56 h-56 mx-auto" />
-                            <p className="mt-4 font-black text-blue-600 text-lg uppercase tracking-widest leading-none">{habitante.codigoAcceso}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 text-left">
-                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 tracking-widest">Titular</span>
-                                <p className="font-black text-slate-900 text-[10px] uppercase truncate leading-tight">{habitante.nombre}</p>
-                            </div>
-                            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 text-left">
-                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 tracking-widest">Dirección</span>
-                                <p className="font-black text-slate-900 text-[10px] uppercase leading-tight truncate">{habitante.casa}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className={`p-6 rounded-[2.5rem] shadow-xl border-2 transition-all flex items-center justify-between ${habitante.disponibleVisitas ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                        <div className="flex items-center gap-4">
-                            <div className={`p-4 rounded-2xl shadow-lg ${habitante.disponibleVisitas ? 'bg-emerald-500' : 'bg-rose-500'} text-white`}>
-                                <Icon name={habitante.disponibleVisitas ? "check-circle" : "x-circle"} />
-                            </div>
-                            <div>
-                                <h3 className={`text-base font-black uppercase leading-none ${habitante.disponibleVisitas ? 'text-emerald-950' : 'text-rose-950'}`}>{habitante.disponibleVisitas ? 'Visitas OK' : 'Cerrado'}</h3>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">Acceso en portería</p>
-                            </div>
-                        </div>
-                        <button disabled={updating} onClick={toggleVisitas} className={`relative w-16 h-8 rounded-full transition-colors flex items-center px-1 shadow-inner ${habitante.disponibleVisitas ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-                            <div className={`w-6 h-6 bg-white rounded-full shadow-lg transition-transform ${habitante.disponibleVisitas ? 'translate-x-8' : 'translate-x-0'} flex items-center justify-center`}>
-                                {updating && <Icon name="loader-2" className="w-3 h-3 animate-spin text-slate-400" />}
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        function GuardiaModule({ habitantes, user, agente }) {
-            const [search, setSearch] = useState("");
-            const [selected, setSelected] = useState(null);
-            const [vName, setVName] = useState("");
-            const filtered = search.trim().length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
-
-            const handleVisit = async () => {
-                if (!vName.trim()) return;
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bitacora'), {
-                        tipo: 'Visita', subtipo: 'Entrada', visitante: vName.toUpperCase(), habitanteId: selected.id, habitanteNombre: selected.nombre, casa: selected.casa, agenteNombre: agente.nombre, timestamp: new Date().toISOString()
-                    });
-                    alert("ACCESO REGISTRADO."); setSelected(null); setVName("");
-                } catch (e) { alert("Error."); }
-            };
-
-            const registerMove = async (h, type) => {
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bitacora'), {
-                        tipo: 'Residente', subtipo: type, habitanteId: h.id, habitanteNombre: h.nombre, casa: h.casa, agenteNombre: agente.nombre, timestamp: new Date().toISOString()
-                    });
-                    alert(`${type.toUpperCase()} REGISTRADA PARA ${h.nombre.toUpperCase()}`);
-                } catch (e) { alert("Error."); }
-            };
-
-            return (
-                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-in">
-                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-200 flex items-center gap-4 focus-within:ring-8 focus:ring-blue-100 transition-all group">
-                        <Icon name="search" className="text-slate-300 w-8 h-8 group-focus-within:text-blue-500 transition-colors" />
-                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar por nombre o casa..." value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filtered.map(h => (
-                            <div key={h.id} className="bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100 flex flex-col gap-4 group hover:border-blue-300 transition-all">
-                                <div className="flex justify-between items-start">
-                                    <div className="space-y-1">
-                                        <h4 className="font-black text-slate-900 uppercase text-xs leading-tight group-hover:text-blue-600 truncate w-32">{h.nombre}</h4>
-                                        <p className="text-[9px] font-black text-slate-400 tracking-widest uppercase leading-none">CASA: {h.casa}</p>
+                    {selectedPhoto && (
+                        <div className="fixed inset-0 bg-slate-900/95 z-[300] flex flex-col items-center justify-center p-6 backdrop-blur-md animate-fade-in no-print">
+                            <div className="max-w-3xl w-full flex flex-col gap-4" id="print-area">
+                                <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print">
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2">
+                                            <Icon name="arrow-left" className="w-4 h-4" /> Retroceder
+                                        </button>
+                                        <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl">
+                                            <Icon name="printer" className="w-4 h-4" /> Imprimir INE
+                                        </button>
                                     </div>
-                                    <div className={`px-2.5 py-1.5 rounded-xl text-[8px] font-black uppercase shadow-sm ${h.disponibleVisitas ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                                        {h.disponibleVisitas ? 'RECEP' : 'BLOQ'}
-                                    </div>
+                                    <button onClick={() => setSelectedPhoto(null)} className="text-white/50"><Icon name="x" className="w-6 h-6" /></button>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => registerMove(h, 'Entrada')} className="flex-1 py-3 bg-slate-50 text-slate-700 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">Ingreso</button>
-                                    <button onClick={() => registerMove(h, 'Salida')} className="flex-1 py-3 bg-slate-50 text-slate-700 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">Salida</button>
+                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl overflow-hidden border-4 border-white/20">
+                                    <img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block" alt="IFE" />
                                 </div>
-                                <button disabled={!h.disponibleVisitas} onClick={() => setSelected(h)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-blue-100 disabled:opacity-20 transition-all hover:bg-blue-700">Registrar Visita</button>
-                            </div>
-                        ))}
-                    </div>
-
-                    {selected && (
-                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md">
-                            <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-6 animate-in shadow-2xl relative overflow-hidden text-center">
-                                <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
-                                <h3 className="text-xl font-black text-slate-900 uppercase">Nueva Visita</h3>
-                                <div className="p-6 bg-blue-50/50 rounded-[2rem] border border-blue-100">
-                                    <p className="text-xl font-black text-slate-800 uppercase leading-none mb-1">{selected.nombre}</p>
-                                    <p className="text-blue-600 font-black text-[10px] uppercase tracking-widest leading-none tracking-widest">CASA: {selected.casa}</p>
-                                </div>
-                                <input autoFocus className="w-full p-4.5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-sm focus:ring-8 focus:ring-blue-100" placeholder="Nombre completo del visitante..." value={vName} onChange={e => setVName(e.target.value)} />
-                                <div className="flex gap-3 pt-2">
-                                    <button onClick={() => setSelected(null)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
-                                    <button disabled={!vName.trim()} onClick={handleVisit} className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-black shadow-2xl uppercase text-[10px] hover:bg-black">Finalizar</button>
-                                </div>
+                                <p className="text-center text-white/40 text-[9px] font-bold uppercase tracking-[0.3em] mt-4 no-print">Registro Oficial - Viyautepec 2a. Sección</p>
                             </div>
                         </div>
                     )}
@@ -421,182 +232,287 @@
             );
         }
 
-        // --- Aplicación Principal ---
+        // --- Vista: Escáner ---
+        function IDScanner({ onCapture, onCancel }) {
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const [stream, setStream] = useState(null);
 
+            useEffect(() => {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } })
+                .then(s => { setStream(s); if(videoRef.current) videoRef.current.srcObject = s; })
+                .catch(() => { alert("Acceso a cámara denegado."); onCancel(); });
+                return () => { if(stream) stream.getTracks().forEach(t => t.stop()); };
+            }, []);
+
+            const capture = () => {
+                const ctx = canvasRef.current.getContext('2d');
+                canvasRef.current.width = videoRef.current.videoWidth;
+                canvasRef.current.height = videoRef.current.videoHeight;
+                ctx.drawImage(videoRef.current, 0, 0);
+                onCapture(canvasRef.current.toDataURL('image/jpeg', 0.7));
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black z-[400] flex flex-col items-center justify-center">
+                    <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                    <div className="scanner-guide"></div>
+                    <div className="absolute top-12 left-0 w-full text-center z-20 px-8">
+                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/20">Encuadre el INE dentro del marco azul</p>
+                    </div>
+                    <div className="absolute bottom-12 flex justify-center gap-10 items-center z-20 w-full">
+                        <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20"><Icon name="x" className="w-8 h-8" /></button>
+                        <button onClick={capture} className="w-24 h-24 bg-white rounded-full border-[12px] border-white/20 shadow-2xl active:scale-90 transition-all"></button>
+                        <div className="w-16"></div>
+                    </div>
+                    <canvas ref={canvasRef} className="hidden" />
+                </div>
+            );
+        }
+
+        // --- App Principal ---
         function App() {
             const [user, setUser] = useState(null);
             const [role, setRole] = useState(null); 
-            const [adminData, setAdminData] = useState(null);
-            const [guardData, setGuardData] = useState(null);
-            const [currentHabitante, setCurrentHabitante] = useState(null);
+            const [activeUser, setActiveUser] = useState(null);
             const [habitantes, setHabitantes] = useState([]);
-            const [admins, setAdmins] = useState([]);
             const [agentes, setAgentes] = useState([]);
+            const [admins, setAdmins] = useState([]);
             const [logs, setLogs] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [dataLoaded, setDataLoaded] = useState(false);
+            const [authStep, setAuthStep] = useState('portal');
 
             useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (e) { console.error(e); }
-                };
-                initAuth();
-                onAuthStateChanged(auth, (u) => { 
-                    setUser(u); 
-                    if(u) setLoading(false); 
-                });
+                auth.signInAnonymously().catch(e => console.error(e));
+                auth.onAuthStateChanged((u) => { if (u) { setUser(u); setLoading(false); } });
             }, []);
 
             useEffect(() => {
                 if (!user) return;
-                const habRef = collection(db, 'artifacts', appId, 'public', 'data', 'habitantes');
-                const logRef = collection(db, 'artifacts', appId, 'public', 'data', 'bitacora');
-                const admRef = collection(db, 'artifacts', appId, 'public', 'data', 'admins');
-                const ageRef = collection(db, 'artifacts', appId, 'public', 'data', 'agentes');
-
-                onSnapshot(habRef, (s) => setHabitantes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                onSnapshot(logRef, (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                onSnapshot(ageRef, (s) => setAgentes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                onSnapshot(admRef, (s) => {
-                    const docs = s.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setAdmins(docs);
-                    setDataLoaded(true);
-                    if (docs.length === 0) {
-                        addDoc(admRef, { nombre: 'Administrador Maestro', usuario: 'admin', password: '123', esSuperuser: true, fechaCreado: new Date().toISOString() });
-                    }
-                });
+                const pathFn = (c) => db.collection(`artifacts/${appId}/public/data/${c}`);
+                pathFn('habitantes').onSnapshot(s => setHabitantes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                pathFn('agentes').onSnapshot(s => setAgentes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                pathFn('bitacora').onSnapshot(s => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                pathFn('admins').onSnapshot(s => setAdmins(s.docs.map(d => ({ id: d.id, ...d.data() }))));
             }, [user]);
 
-            const LoginScreen = ({ onSelect }) => {
-                const [mode, setMode] = useState(null); 
-                const [userInput, setUserInput] = useState("");
-                const [passInput, setPassInput] = useState("");
+            const handleLogin = (r, u, p) => {
+                if (u === 'superuser' && p === 'tlahuiscalpantecutli') {
+                    setActiveUser({ nombre: 'Súper Usuario', usuario: 'superuser', isSuper: true });
+                    setRole('superuser'); setAuthStep('dashboard'); return;
+                }
+                if (r === 'admin' && u === 'admin' && p === '123') {
+                    setActiveUser({ nombre: 'Activación Maestro', usuario: 'admin', mustInit: true });
+                    setRole('admin'); setAuthStep('dashboard'); return;
+                }
+                let source = r === 'guardia' ? agentes : (r === 'habitante' ? habitantes : (r === 'admin' ? admins : []));
+                const target = source.find(x => (x.usuario || x.id) === u && x.password === p);
+                if (target) { setActiveUser(target); setRole(r); setAuthStep('dashboard'); } 
+                else { alert("Credenciales incorrectas."); }
+            };
 
-                const handleLogin = (e) => {
-                    e.preventDefault();
-                    let found = null;
-                    if (mode === 'admin') found = admins.find(a => a.usuario === userInput && a.password === passInput);
-                    if (mode === 'guardia') found = agentes.find(a => a.usuario === userInput && a.password === passInput);
-                    if (mode === 'habitante') found = habitantes.find(h => h.id === userInput && h.password === passInput);
+            if (loading) return (
+                <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-6">
+                    <div className="p-4 bg-blue-600 rounded-[2rem] shadow-2xl animate-bounce"><Icon name="shield" className="w-14 h-14" /></div>
+                    <h2 className="text-2xl font-black tracking-widest uppercase animate-pulse">VIYAUTEPEC</h2>
+                </div>
+            );
 
-                    if (found) onSelect(mode, found); else alert("Credenciales incorrectas.");
-                };
+            if (authStep === 'portal') return (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-50 space-y-12 animate-fade-in h-screen">
+                    <div className="text-center">
+                        <div className="p-4 bg-blue-600 text-white rounded-3xl inline-block shadow-2xl mb-6"><Icon name="shield" className="w-10 h-10" /></div>
+                        <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter uppercase leading-none">Viyautepec 2a. Sección</h1>
+                        <p className="text-slate-400 font-bold text-sm md:text-base uppercase mt-2 tracking-widest opacity-80">(control de seguridad)</p>
+                    </div>
+                    <div className="flex flex-row justify-center items-stretch gap-4 md:gap-6 w-full max-w-4xl px-4">
+                        <PortalButton icon="settings" title="ADMIN" color="bg-slate-900" onClick={() => setAuthStep('login_admin')} />
+                        <PortalButton icon="user" title="HABITANTE" color="bg-blue-600" onClick={() => setAuthStep('login_habitante')} />
+                        <PortalButton icon="shield-check" title="SEGURIDAD" color="bg-emerald-600" onClick={() => setAuthStep('login_guardia')} />
+                    </div>
+                </div>
+            );
 
-                if (mode) return (
-                    <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-full overflow-hidden">
-                        <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm border border-slate-100 text-center animate-in">
-                            <div className={`w-14 h-14 rounded-3xl flex items-center justify-center mx-auto mb-6 text-white shadow-xl ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
-                                <Icon name={mode === 'admin' ? "shield-alert" : mode === 'guardia' ? "shield-check" : "user"} />
-                            </div>
-                            <h2 className="text-xl font-black uppercase mb-6 tracking-tight leading-none tracking-widest">Acceso {mode}</h2>
-                            <form onSubmit={handleLogin} className="space-y-4">
+            if (authStep.startsWith('login_') && !activeUser) {
+                const mode = authStep.split('_')[1];
+                return (
+                    <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen">
+                        <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm border border-slate-100 text-center animate-fade-in relative overflow-hidden">
+                            <div className={`absolute top-0 left-0 w-full h-2 ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}></div>
+                            <h2 className="text-3xl font-black uppercase mb-1 tracking-tighter">Entrar</h2>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8">Módulo: {mode}</p>
+                            {mode === 'admin' && <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase">Acceso inicial: admin / 123</div>}
+                            <form onSubmit={e => { e.preventDefault(); handleLogin(mode, e.target.u.value, e.target.p.value); }} className="space-y-4 text-left">
                                 {mode === 'habitante' ? (
-                                    <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" value={userInput} onChange={e => setUserInput(e.target.value)} required>
-                                        <option value="">Buscar Nombre...</option>
-                                        {habitantes.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
+                                    <select name="u" className="w-full p-4 bg-slate-50 rounded-2xl border font-black text-xs outline-none focus:ring-4 focus:ring-blue-100" required>
+                                        <option value="">Seleccione Nombre...</option>
+                                        {habitantes.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
                                     </select>
-                                ) : (
-                                    <input className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" placeholder="ID Usuario" value={userInput} onChange={e => setUserInput(e.target.value)} required />
-                                )}
-                                <input type="password" placeholder="Código / Password" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs outline-none" value={passInput} onChange={e => setPassInput(e.target.value)} required />
-                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Entrar</button>
-                                <button type="button" onClick={() => {setMode(null); setUserInput(""); setPassInput("");}} className="w-full text-slate-400 text-[10px] font-black uppercase pt-2 hover:text-slate-700 transition-colors underline decoration-2 decoration-slate-200">Volver</button>
+                                ) : <input name="u" className="w-full p-4 bg-slate-50 rounded-2xl border font-black text-xs outline-none focus:ring-4 focus:ring-blue-100" placeholder="ID Usuario" required />}
+                                <input name="p" type="password" placeholder="Clave" className="w-full p-4 bg-slate-50 rounded-2xl border font-black text-xs outline-none focus:ring-4 focus:ring-blue-100" required />
+                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[10px] tracking-widest">Ingresar</button>
+                                <button type="button" onClick={() => setAuthStep('portal')} className="w-full text-center text-slate-400 text-[10px] font-black uppercase mt-4">Volver al inicio</button>
                             </form>
                         </div>
                     </div>
                 );
+            }
 
-                return (
-                    <div className="flex-1 flex flex-col items-center justify-center p-4 bg-slate-50 h-full space-y-12 animate-in overflow-hidden">
-                        <div className="text-center space-y-2">
-                            <div className="inline-block bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] mb-4">Seguridad Privada</div>
-                            <h1 className="text-5xl md:text-6xl font-black text-slate-950 tracking-tighter uppercase leading-none">VIYAUTEPEC 2A. SECCIÓN</h1>
-                            <p className="text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.4em] opacity-80 mt-2 tracking-tighter leading-none">Gestión Integral de Vigilancia y Accesos</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl px-4">
-                            <RoleCard icon={<Icon name="settings" className="w-8 h-8" />} title="Administración" desc="Cuentas y Directorio" color="bg-slate-900" onClick={() => setMode('admin')} />
-                            <RoleCard icon={<Icon name="user" className="w-8 h-8" />} title="Residente" desc="Pase QR y Visitas" color="bg-blue-600" onClick={() => setMode('habitante')} />
-                            <RoleCard icon={<Icon name="shield-check" className="w-8 h-8" />} title="Seguridad" desc="Control de Accesos" color="bg-emerald-600" onClick={() => setMode('guardia')} />
-                        </div>
-                    </div>
-                );
-            };
-
-            const RoleCard = ({ icon, title, desc, color, onClick }) => (
-                <button onClick={onClick} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-5 hover:scale-105 transition-all group active:scale-95 shadow-slate-200/50">
-                    <div className={`p-5 rounded-3xl ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}>{icon}</div>
-                    <div className="space-y-1">
-                        <h3 className="text-base font-black text-slate-900 uppercase leading-none tracking-tight leading-none">{title}</h3>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none opacity-60 mt-1">{desc}</p>
-                    </div>
-                </button>
-            );
-
-            if (loading) return (
-                <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6 text-center">
-                    <Icon name="loader-2" className="w-10 h-10 animate-spin text-blue-500 mb-6" />
-                    <h2 className="text-xl font-black tracking-widest uppercase mb-1">VIYAUTEPEC</h2>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] animate-pulse">Sincronizando con Portería...</p>
-                </div>
-            );
+            if (activeUser?.mustInit) return <MaestroReg onComplete={setActiveUser} />;
 
             return (
-                <div className="h-screen flex flex-col overflow-hidden">
-                    {role && (
-                        <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-xl shrink-0 z-[100] border-b border-slate-800">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20"><Icon name="shield" className="w-5 h-5"/></div>
-                                <div className="flex flex-col">
-                                    <span className="font-black text-sm leading-none uppercase tracking-tight leading-none">VIYAUTEPEC</span>
-                                    <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest leading-none mt-0.5">2a. Sección</span>
-                                </div>
+                <div className="h-full flex flex-col overflow-hidden bg-slate-50 animate-fade-in">
+                    <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 no-print">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 p-2 rounded-xl shadow-lg"><Icon name="shield" className="w-4 h-4 text-white"/></div>
+                            <div className="flex flex-col leading-none">
+                                <span className="font-black text-sm uppercase">VIYAUTEPEC</span>
+                                <span className="text-[8px] font-bold text-blue-400 uppercase">2a. Sección</span>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="hidden md:flex flex-col items-end mr-2">
-                                    <span className="font-bold text-[9px] text-slate-400 uppercase tracking-widest leading-none mb-1">Operador Activo</span>
-                                    <span className="font-bold text-[10px] text-slate-200 uppercase truncate max-w-[150px]">{role === 'habitante' ? currentHabitante?.nombre : (role === 'guardia' ? guardData?.nombre : adminData?.nombre)}</span>
-                                </div>
-                                <button onClick={() => {setRole(null); setAdminData(null); setGuardData(null); setCurrentHabitante(null);}} className="px-3 py-2 bg-slate-800 hover:bg-rose-600 text-white rounded-xl transition-all font-bold text-[9px] uppercase border border-slate-700 active:scale-95">Salir</button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-end text-right">
+                                <span className="text-[10px] font-black uppercase text-white leading-none mb-1">{activeUser?.nombre}</span>
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none">
+                                    {role === 'admin' ? 'Administrador' : role === 'guardia' ? 'Seguridad' : role === 'superuser' ? 'Root' : 'Residente'}
+                                </span>
                             </div>
-                        </header>
-                    )}
-
-                    <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
-                        {!role ? (
-                            <LoginScreen onSelect={(r, d) => {
-                                setRole(r); 
-                                if(r==='admin') setAdminData(d);
-                                if(r==='habitante') setCurrentHabitante(d);
-                                if(r==='guardia') setGuardData(d);
-                            }} />
-                        ) : (
-                            <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full custom-scrollbar">
-                                {role === 'admin' && <AdminDashboard habitantes={habitantes} logs={logs} admins={admins} agentes={agentes} adminData={adminData} />}
-                                {role === 'habitante' && (
-                                    currentHabitante.mustChangeCode ? (
-                                        <ChangeCodeView title="Actualizar Clave Residente" onSubmit={async (pass) => {
-                                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'habitantes', currentHabitante.id), { password: pass, mustChangeCode: false });
-                                            setCurrentHabitante({...currentHabitante, mustChangeCode: false});
-                                        }} />
-                                    ) : <HabitanteModule habitante={habitantes.find(h => h.id === currentHabitante.id) || currentHabitante} />
-                                )}
-                                {role === 'guardia' && (
-                                    guardData.mustChangeCode ? (
-                                        <ChangeCodeView title="Actualizar Clave Personal" onSubmit={async (pass) => {
-                                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agentes', guardData.id), { password: pass, mustChangeCode: false });
-                                            setGuardData({...guardData, mustChangeCode: false});
-                                        }} />
-                                    ) : <GuardiaModule habitantes={habitantes} user={user} agente={guardData} />
-                                )}
-                            </div>
-                        )}
+                            <button onClick={() => {setRole(null); setActiveUser(null); setAuthStep('portal');}} className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-white rounded-lg font-bold text-[9px] uppercase transition-all shadow-lg border border-slate-700">Salir</button>
+                        </div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50">
+                        <div className="max-w-7xl mx-auto w-full h-full pb-24 no-print">
+                            {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} />}
+                            {role === 'habitante' && <HabitanteModule activeUser={habitantes.find(h => h.id === activeUser.id) || activeUser} />}
+                            {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
+                        </div>
                     </div>
+                </div>
+            );
+        }
+
+        const PortalButton = ({ icon, title, color, onClick }) => (
+            <button onClick={onClick} className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center justify-center gap-4 hover:scale-105 transition-all group active:scale-95 shadow-slate-200/40 w-full max-w-[140px] md:max-w-[200px]">
+                <div className={`p-4 md:p-6 rounded-[1.5rem] ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}><Icon name={icon} className="w-10 h-10" /></div>
+                <h3 className="text-[10px] md:text-sm font-black text-slate-900 uppercase leading-none">{title}</h3>
+            </button>
+        );
+
+        function MaestroReg({ onComplete }) {
+            const [m, setM] = useState({ n: '', p: '', c: '' });
+            const handle = async (e) => {
+                e.preventDefault();
+                if (m.p !== m.c) return alert("Contraseñas no coinciden");
+                const data = { nombre: m.n, usuario: 'admin_maestro', password: m.p, esMaestro: true };
+                await db.collection(`artifacts/${appId}/public/data/admins`).add(data);
+                alert("Activado."); onComplete(data);
+            };
+            return (
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-screen">
+                    <div className="bg-white p-12 rounded-[4rem] shadow-2xl w-full max-w-md text-center border-t-8 border-blue-600">
+                        <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-xl"><Icon name="key" className="w-10 h-10" /></div>
+                        <h2 className="text-2xl font-black uppercase text-slate-950 mb-2">Activación Pro</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-8">Registre el perfil administrativo permanente</p>
+                        <form onSubmit={handle} className="space-y-4 text-left">
+                            <input className="w-full p-4 bg-slate-50 rounded-2xl border font-bold" placeholder="Nombre completo" onChange={e => setM({...m, n: e.target.value})} required />
+                            <input type="password" title="password" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold" placeholder="Nueva Contraseña" onChange={e => setM({...m, p: e.target.value})} required />
+                            <input type="password" title="confirm" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold" placeholder="Confirmar" onChange={e => setM({...m, c: e.target.value})} required />
+                            <button className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase shadow-2xl mt-4">Guardar y Activar</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function HabitanteModule({ activeUser }) {
+            const [updating, setUpdating] = useState(false);
+            const clave = getClavePersonalizada(activeUser.nombre, activeUser.casa);
+            const handleToggle = async () => {
+                setUpdating(true);
+                await db.doc(`artifacts/${appId}/public/data/habitantes/${activeUser.id}`).update({ disponibleVisitas: !activeUser.disponibleVisitas });
+                setUpdating(false);
+            };
+            return (
+                <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in">
+                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600"></div>
+                        <h2 className="text-2xl font-black uppercase tracking-tighter mb-8 mt-2 text-slate-900 leading-none">Pase Residencial</h2>
+                        <div className="bg-white p-4 rounded-[3.5rem] inline-block border-8 border-slate-50 shadow-inner mb-6">
+                            <img src={getQRURL(clave)} className="w-56 h-56 mx-auto" alt="QR" />
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 w-full">
+                            <span className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest leading-none">Identificador Único</span>
+                            <p className="font-black text-blue-600 text-2xl tracking-[0.2em] leading-none uppercase">{clave}</p>
+                        </div>
+                    </div>
+                    <button disabled={updating} onClick={handleToggle} className={`w-full py-7 rounded-[2.5rem] font-black uppercase text-sm tracking-widest shadow-2xl transition-all active:scale-95 border-b-8 ${activeUser.disponibleVisitas ? 'bg-emerald-500 border-emerald-700 text-white shadow-emerald-200' : 'bg-rose-500 border-rose-700 text-white shadow-rose-200'}`}>
+                        {updating ? <Icon name="loader-2" className="w-6 h-6 animate-spin mx-auto" /> : (activeUser.disponibleVisitas ? 'ESTADO: DISPONIBLE' : 'ESTADO: BLOQUEADO')}
+                    </button>
+                </div>
+            );
+        }
+
+        function GuardiaFlow({ agente, habitantes }) {
+            const [search, setSearch] = useState("");
+            const [sel, setSel] = useState(null);
+            const [vName, setVName] = useState("");
+            const [photo, setPhoto] = useState(null);
+            const [scanning, setScanning] = useState(false);
+
+            const handleReg = async () => {
+                await db.collection(`artifacts/${appId}/public/data/bitacora`).add({
+                    tipo: 'Visita', subtipo: 'Entrada', visitante: vName.toUpperCase(), habitanteNombre: sel.nombre, casa: sel.casa, timestamp: new Date().toISOString(), agente: agente.nombre, fotoINE: photo
+                });
+                alert("Registrado con éxito."); setSel(null); setVn(""); setPhoto(null);
+            };
+
+            const filtered = search.length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
+
+            return (
+                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20">
+                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group">
+                        <Icon name="search" className="text-slate-300 w-10 h-10 group-focus-within:text-blue-500 transition-colors" />
+                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar habitante..." value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filtered.map(h => (
+                            <div key={h.id} className={`bg-white rounded-[2.5rem] shadow-xl border-t-8 flex flex-col animate-fade-in ${h.disponibleVisitas ? 'border-emerald-500' : 'border-rose-500'}`}>
+                                <div className="p-6 space-y-4">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <h4 className="font-black text-slate-950 uppercase text-sm truncate leading-tight flex-1">{h.nombre}</h4>
+                                        <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${h.disponibleVisitas ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{h.disponibleVisitas ? 'OK' : 'BLOQ'}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">CASA: {h.casa}</p>
+                                    <button disabled={!h.disponibleVisitas} onClick={() => setSel(h)} className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg transition-all active:scale-95 ${h.disponibleVisitas ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>Registrar Visita</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {sel && (
+                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-6 backdrop-blur-md overflow-y-auto">
+                            <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+                                <h3 className="text-xl font-black uppercase text-slate-900 leading-none">Nueva Visita</h3>
+                                <div className="p-8 bg-blue-50 rounded-[3rem] border border-blue-100">
+                                    <p className="text-xl font-black text-slate-800 uppercase leading-none">{sel.nombre}</p>
+                                    <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest mt-1">CASA {sel.casa}</p>
+                                </div>
+                                <div className="space-y-6 text-left">
+                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nombre del visitante</label><input autoFocus className="w-full p-5 bg-slate-50 rounded-3xl border-2 border-slate-100 font-bold outline-none focus:border-blue-500 transition-all text-center uppercase" value={vName} onChange={e => setVName(e.target.value)} /></div>
+                                    <button onClick={() => setScanning(true)} className={`w-full py-5 rounded-[1.5rem] border-2 border-dashed flex items-center justify-center gap-3 transition-all ${photo ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
+                                        <Icon name="camera" className="w-8 h-8" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">{photo ? "IFE CAPTURADA" : "ESCANEAR INE"}</span>
+                                    </button>
+                                    {photo && <img src={photo} className="w-full h-32 object-cover rounded-2xl border shadow-inner" alt="Previo" />}
+                                </div>
+                                <div className="flex gap-4">
+                                    <button onClick={() => {setSel(null); setPhoto(null);}} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-xs">Cerrar</button>
+                                    <button disabled={!vName.trim()} onClick={handleReg} className="flex-1 py-5 bg-slate-950 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-2xl active:scale-95 transition-all disabled:opacity-20">Autorizar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {scanning && <IDScanner onCapture={(img) => { setPhoto(img); setScanning(false); }} onCancel={() => setScanning(false)} />}
                 </div>
             );
         }
