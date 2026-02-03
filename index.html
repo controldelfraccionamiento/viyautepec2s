@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Firebase SDK Compat Mode -->
+    <!-- Firebase SDK Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -21,22 +21,23 @@
             font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow: hidden; 
         }
         #root { height: 100%; display: flex; flex-direction: column; }
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
         .scanner-guide {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 85%; height: 55%; border: 3px solid #3b82f6; border-radius: 24px;
+            width: 85%; height: 55%; border: 4px solid #3b82f6; border-radius: 24px;
             box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.75); z-index: 10;
         }
 
         @media print {
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 2cm; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 1cm; }
             .no-print { display: none !important; }
         }
     </style>
@@ -65,22 +66,27 @@
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
 
+        // --- Helper de Rutas Estrictas ---
+        const getColRef = (name) => {
+            return db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
+        };
+
         // --- Utilidades ---
         const getClavePersonalizada = (nombre, casa) => {
             if (!nombre || !casa) return "RES-XXXX";
-            const cleanName = nombre.trim().split(/\s+/);
-            const n = (cleanName[0] || "XX").slice(0, 2).toUpperCase();
-            const a = (cleanName[1] || cleanName[0].slice(2, 4) || "XX").slice(0, 2).toUpperCase();
-            const cleanCasa = casa.trim().split(/\s+/);
-            const c = (cleanCasa[0] || "XX").slice(0, 2).toUpperCase();
-            const matchNum = casa.match(/\d+/);
-            const num = matchNum ? matchNum[0].padStart(2, '0').slice(-2) : "00";
+            const parts = nombre.trim().split(/\s+/);
+            const n = (parts[0] || "XX").slice(0, 2).toUpperCase();
+            const a = (parts[1] || parts[0].slice(2, 4) || "XX").slice(0, 2).toUpperCase();
+            const cParts = casa.trim().split(/\s+/);
+            const c = (cParts[0] || "XX").slice(0, 2).toUpperCase();
+            const match = casa.match(/\d+/);
+            const num = match ? match[0].padStart(2, '0').slice(-2) : "00";
             return `RES-${n}${a}${c}${num}`;
         };
 
         const getQRURL = (data) => `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(data)}`;
 
-        // --- Componente de Iconos SVG ---
+        // --- Iconos SVG ---
         const Icon = ({ name, className = "w-5 h-5" }) => {
             const icons = {
                 shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
@@ -97,7 +103,9 @@
                 lock: <Fragment><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Fragment>,
                 "plus-circle": <Fragment><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></Fragment>,
                 "refresh-cw": <Fragment><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></Fragment>,
+                "search": <Fragment><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></Fragment>,
                 "shield-check": <Fragment><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></Fragment>,
+                "key": <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -106,7 +114,6 @@
             );
         };
 
-        // --- Componente: Tabla ---
         const DataTable = ({ headers, rows }) => (
             <div className="overflow-x-auto rounded-3xl border border-slate-100 animate-fade-in">
                 <table className="w-full text-left text-sm">
@@ -119,74 +126,61 @@
                                 {row.map((cell, j) => <td key={j} className="px-6 py-4 font-bold text-slate-700">{cell}</td>)}
                             </tr>
                         ))}
-                        {rows.length === 0 && (
-                            <tr><td colSpan={headers.length} className="px-6 py-12 text-center text-slate-300 italic uppercase text-[10px]">Sin registros</td></tr>
-                        )}
                     </tbody>
                 </table>
             </div>
         );
 
-        // --- Vista: Administración ---
-        function AdminView({ habitantes, agentes, logs, admins, role, activeUser }) {
+        function AdminView({ habitantes, agentes, logs, admins, role, activeUser, onResetSuccess }) {
             const [tab, setTab] = useState('residentes');
             const [view, setView] = useState('list');
             const [selectedPhoto, setSelectedPhoto] = useState(null);
-            const [isResetting, setIsResetting] = useState(false);
+            const [isActionLoading, setIsActionLoading] = useState(false);
             const [form, setForm] = useState({ nombre: '', casa: '', usuario: '', password: '' });
 
             const isMaestro = activeUser?.esMaestro || role === 'superuser';
 
-            // FUNCIÓN DE BORRADO CORREGIDA
             const deleteEntry = async (col, id) => {
                 if(!confirm("¿Seguro que desea eliminar este registro?")) return;
                 try {
-                    await db.collection(`artifacts/${appId}/public/data/${col}`).doc(id).delete();
+                    await getColRef(col).doc(id).delete();
                 } catch (e) {
-                    alert("Error al borrar: " + e.message);
+                    alert("Error: " + e.message);
                 }
             };
 
-            // FUNCIÓN DE REINICIO CORREGIDA PARA SUPERUSER
             const resetAdministrators = async () => {
-                if(!confirm("PELIGRO: Se eliminarán todos los administradores. El acceso 'admin / 123' se habilitará de nuevo. ¿Continuar?")) return;
-                
-                setIsResetting(true);
+                if(!confirm("PELIGRO: Se borrarán todos los administradores. ¿Continuar?")) return;
+                setIsActionLoading(true);
                 try {
-                    const adminColRef = db.collection(`artifacts/${appId}/public/data/admins`);
-                    const snapshot = await adminColRef.get();
-                    
+                    const snapshot = await getColRef('admins').get();
                     const batch = db.batch();
-                    snapshot.forEach(doc => {
-                        batch.delete(doc.ref);
-                    });
-                    
+                    snapshot.forEach(doc => batch.delete(doc.ref));
                     await batch.commit();
-                    alert("Sistema de administradores reiniciado correctamente.");
-                    window.location.reload();
+                    alert("Reinicio completado.");
+                    onResetSuccess();
                 } catch (e) {
-                    alert("Error en el reinicio: " + e.message);
+                    alert("Error: " + e.message);
                 }
-                setIsResetting(false);
+                setIsActionLoading(false);
             };
 
             const handleSave = async (e) => {
                 e.preventDefault();
-                const colMap = { residentes: 'habitantes', agentes: 'agentes', administradores: 'admins' };
-                const colName = colMap[tab];
-                
+                setIsActionLoading(true);
+                const colName = tab === 'residentes' ? 'habitantes' : (tab === 'agentes' ? 'agentes' : 'admins');
                 try {
-                    const data = { ...form, mustChangeCode: true };
+                    const data = { ...form, usuario: form.usuario.trim().toLowerCase(), mustChangeCode: true };
                     if (tab === 'residentes') data.disponibleVisitas = true;
                     if (tab === 'administradores') data.esMaestro = false;
-
-                    await db.collection(`artifacts/${appId}/public/data/${colName}`).add(data);
-                    alert("Guardado exitosamente.");
+                    await getColRef(colName).add(data);
+                    alert("Guardado.");
                     setForm({ nombre: '', casa: '', usuario: '', password: '' });
                     setView('list');
                 } catch (err) {
-                    alert("Error al guardar: " + err.message);
+                    alert("Error: " + err.message);
                 }
+                setIsActionLoading(false);
             };
 
             const tabs = ['residentes', 'agentes', 'bitacora'];
@@ -195,112 +189,104 @@
             useEffect(() => { setView('list'); }, [tab]);
 
             return (
-                <div className="space-y-4 animate-fade-in pb-20">
+                <div className="space-y-4 animate-fade-in pb-24 h-full">
                     <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-fit overflow-x-auto max-w-full no-print">
                         {tabs.map(t => (
-                            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>{t}</button>
+                            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
                         ))}
                     </div>
 
-                    <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-[400px]">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight">{tab}</h2>
+                    <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-[500px]">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black uppercase text-slate-800 tracking-tight">{tab}</h2>
                             <div className="flex gap-3">
                                 {role === 'superuser' && tab === 'administradores' && (
-                                    <button 
-                                        onClick={resetAdministrators} 
-                                        disabled={isResetting}
-                                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg hover:bg-rose-700 transition-all disabled:opacity-50"
-                                    >
-                                        <Icon name={isResetting ? "loader-2" : "refresh-cw"} className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} /> 
-                                        {isResetting ? 'Reiniciando...' : 'Reiniciar Admins'}
+                                    <button onClick={resetAdministrators} disabled={isActionLoading} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg disabled:opacity-50 transition-all">
+                                        <Icon name="refresh-cw" className={isActionLoading ? 'animate-spin' : ''} /> Reiniciar
                                     </button>
                                 )}
                                 {view === 'list' && tab !== 'bitacora' && (
-                                    <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg hover:bg-blue-700 transition-all">
-                                        <Icon name="plus-circle" className="w-4 h-4" /> Nuevo {tab.slice(0,-1)}
+                                    <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg">
+                                        <Icon name="plus-circle" /> Nuevo
                                     </button>
                                 )}
                             </div>
                         </div>
 
                         {view === 'add' ? (
-                            <div className="max-w-md mx-auto py-8 animate-fade-in">
-                                <form onSubmit={handleSave} className="space-y-4">
+                            <div className="max-w-md mx-auto py-4 animate-fade-in">
+                                <form onSubmit={handleSave} className="space-y-5">
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nombre Completo</label>
-                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-50" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nombre completo</label>
+                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
                                     </div>
                                     {tab === 'residentes' ? (
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Dirección / Lote</label>
-                                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-50" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} placeholder="Ej: Morelos 12" required />
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Lote / Casa</label>
+                                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />
                                         </div>
                                     ) : (
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">ID Usuario</label>
-                                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-50" value={form.usuario} onChange={e => setForm({...form, usuario: e.target.value})} placeholder="Ej: admin_norte" required />
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">ID de Usuario (Login)</label>
+                                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" value={form.usuario} onChange={e => setForm({...form, usuario: e.target.value})} placeholder="Ej: admin_aux" required />
                                         </div>
                                     )}
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Clave Temporal</label>
-                                        <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-50" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Clave inicial</label>
+                                        <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
                                     </div>
                                     <div className="flex gap-4 pt-4">
                                         <button type="button" onClick={() => setView('list')} className="flex-1 py-4 bg-slate-100 text-slate-400 font-black uppercase rounded-2xl text-[10px]">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-4 bg-slate-900 text-white font-black uppercase rounded-2xl text-[10px] shadow-xl">Registrar</button>
+                                        <button type="submit" disabled={isActionLoading} className="flex-1 py-4 bg-slate-900 text-white font-black uppercase rounded-2xl text-[10px] shadow-xl">
+                                            {isActionLoading ? 'Guardando...' : 'Guardar'}
+                                        </button>
                                     </div>
                                 </form>
                             </div>
                         ) : (
-                            <Fragment>
-                                {tab === 'residentes' && (
-                                    <DataTable 
-                                        headers={['Nombre', 'Lote', 'Acción']} 
-                                        rows={habitantes.map(h => [h.nombre, h.casa, <button onClick={() => deleteEntry('habitantes', h.id)} className="text-rose-500 font-black">Eliminar</button>])}
-                                    />
-                                )}
-
-                                {tab === 'agentes' && (
-                                    <DataTable 
-                                        headers={['Agente', 'Usuario', 'Acción']} 
-                                        rows={agentes.map(a => [a.nombre, `@${a.usuario}`, <button onClick={() => deleteEntry('agentes', a.id)} className="text-rose-500 font-black">Borrar</button>])}
-                                    />
-                                )}
-
-                                {tab === 'administradores' && isMaestro && (
-                                    <DataTable 
-                                        headers={['Nombre', 'Usuario', 'Nivel', 'Acción']} 
-                                        rows={admins.map(a => [
-                                            a.nombre, 
-                                            `@${a.usuario}`, 
-                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${a.esMaestro ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'}`}>{a.esMaestro ? 'Maestro' : 'Auxiliar'}</span>,
-                                            a.esMaestro && role !== 'superuser' ? '-' : <button onClick={() => deleteEntry('admins', a.id)} className="text-rose-500 font-black">Borrar</button>
-                                        ])}
-                                    />
-                                )}
-
-                                {tab === 'bitacora' && (
-                                    <div className="overflow-x-auto rounded-3xl border border-slate-100 font-medium">
-                                        <table className="w-full text-left text-xs font-medium">
-                                            <thead className="bg-slate-50">
-                                                <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Fecha/Hora</th><th>Sujeto</th><th className="text-center">IFE</th></tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-50">
-                                                {logs.sort((a,b)=>b.timestamp.localeCompare(a.timestamp)).map(l => (
-                                                    <tr key={l.id} className="hover:bg-slate-50 transition-colors">
-                                                        <td className="px-6 py-4 text-slate-400 tracking-tighter">{new Date(l.timestamp).toLocaleString()}</td>
-                                                        <td className="uppercase font-black text-slate-700">{l.visitante || l.habitanteNombre}<br/><span className="text-[9px] opacity-60 text-blue-600 font-black">{l.tipo}</span></td>
-                                                        <td className="text-center">
-                                                            {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-100 transition-all shadow-sm"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 font-black tracking-tighter">N/A</span>}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </Fragment>
+                            <div className="overflow-x-auto rounded-3xl border border-slate-100 font-medium">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-50">
+                                        {tab === 'bitacora' ? (
+                                            <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Fecha/Hora</th><th>Sujeto</th><th className="text-center">IFE</th></tr>
+                                        ) : (
+                                            <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Nombre</th><th>Identificador</th>{isMaestro && <th className="text-right pr-6">Acción</th>}</tr>
+                                        )}
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {tab === 'residentes' && habitantes.map(h => (
+                                            <tr key={h.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-700">{h.nombre}</td>
+                                                <td className="px-6 py-4 text-slate-500 uppercase font-black">{h.casa}</td>
+                                                <td className="px-6 py-4 text-right pr-6"><button onClick={() => deleteEntry('habitantes', h.id)} className="text-rose-400 font-black">×</button></td>
+                                            </tr>
+                                        ))}
+                                        {tab === 'agentes' && agentes.map(a => (
+                                            <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-700">{a.nombre}</td>
+                                                <td className="px-6 py-4 text-slate-500">@{a.usuario}</td>
+                                                <td className="px-6 py-4 text-right pr-6"><button onClick={() => deleteEntry('agentes', a.id)} className="text-rose-400 font-black">×</button></td>
+                                            </tr>
+                                        ))}
+                                        {tab === 'administradores' && admins.map(a => (
+                                            <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-700">{a.nombre} {a.esMaestro && "⭐"}</td>
+                                                <td className="px-6 py-4 text-slate-500">@{a.usuario}</td>
+                                                <td className="px-6 py-4 text-right pr-6">{(!a.esMaestro || role === 'superuser') && <button onClick={() => deleteEntry('admins', a.id)} className="text-rose-400 font-black">×</button>}</td>
+                                            </tr>
+                                        ))}
+                                        {tab === 'bitacora' && logs.sort((a,b)=>b.timestamp.localeCompare(a.timestamp)).map(l => (
+                                            <tr key={l.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-6 py-4 text-slate-400 tracking-tighter">{new Date(l.timestamp).toLocaleString()}</td>
+                                                <td className="uppercase font-black text-slate-700">{l.visitante || l.habitanteNombre}<br/><span className="text-[9px] opacity-60 text-blue-600 font-black">{l.tipo}</span></td>
+                                                <td className="text-center">
+                                                    {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-200 transition-all"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 font-black tracking-tighter">N/A</span>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
 
@@ -309,16 +295,16 @@
                             <div className="max-w-3xl w-full flex flex-col gap-4" id="print-area">
                                 <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print">
                                     <div className="flex gap-3">
-                                        <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2">
+                                        <button onClick={() => setSelectedPhoto(null)} className="px-5 py-2 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 transition-all">
                                             <Icon name="arrow-left" className="w-4 h-4" /> Volver
                                         </button>
-                                        <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl">
-                                            <Icon name="printer" className="w-4 h-4" /> Imprimir INE
+                                        <button onClick={() => window.print()} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl">
+                                            <Icon name="printer" className="w-4 h-4" /> Imprimir
                                         </button>
                                     </div>
                                     <button onClick={() => setSelectedPhoto(null)} className="text-white/50 hover:text-white"><Icon name="x" className="w-6 h-6" /></button>
                                 </div>
-                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl overflow-hidden border-4 border-white/20">
+                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border-4 border-white/20">
                                     <img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block" alt="IFE" />
                                 </div>
                             </div>
@@ -328,16 +314,19 @@
             );
         }
 
-        // --- Vista: Escáner ---
         function IDScanner({ onCapture, onCancel }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
             const [stream, setStream] = useState(null);
 
             useEffect(() => {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } })
-                .then(s => { setStream(s); if(videoRef.current) videoRef.current.srcObject = s; })
-                .catch(() => { alert("Acceso a cámara denegado."); onCancel(); });
+                const init = async () => {
+                    try {
+                        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } });
+                        setStream(s); if(videoRef.current) videoRef.current.srcObject = s;
+                    } catch(e) { alert("Cámara no disponible."); onCancel(); }
+                };
+                init();
                 return () => { if(stream) stream.getTracks().forEach(t => t.stop()); };
             }, []);
 
@@ -355,7 +344,7 @@
                     <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                     <div className="scanner-guide"></div>
                     <div className="absolute top-12 left-0 w-full text-center z-20 px-4">
-                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block">Encuadre el documento dentro del marco azul</p>
+                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block">Centre la identificación en el marco azul</p>
                     </div>
                     <div className="absolute bottom-12 flex justify-center gap-10 items-center z-20 w-full px-6">
                         <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20"><Icon name="x" className="w-8 h-8" /></button>
@@ -367,39 +356,177 @@
             );
         }
 
-        // --- Vista: Cambio de Contraseña ---
-        function PasswordChangeView({ user, role, onComplete }) {
-            const [pass, setPass] = useState("");
-            const [loading, setLoading] = useState(false);
+        function MaestroReg({ onComplete }) {
+            const [m, setM] = useState({ n: '', u: '', p: '', c: '' });
+            const [isSaving, setIsSaving] = useState(false);
 
-            const handleUpdate = async (e) => {
+            const handle = async (e) => {
                 e.preventDefault();
-                if (pass.length < 5) return alert("Mínimo 5 caracteres por seguridad.");
-                setLoading(true);
+                if (m.p !== m.c) return alert("Las contraseñas no coinciden.");
+                setIsSaving(true);
                 try {
-                    const colMap = { admin: 'admins', superuser: 'admins', habitante: 'habitantes', guardia: 'agentes' };
-                    const colName = colMap[role] || 'admins';
-                    await db.collection(`artifacts/${appId}/public/data/${colName}`).doc(user.id).update({
-                        password: pass,
-                        mustChangeCode: false
-                    });
-                    onComplete({ ...user, password: pass, mustChangeCode: false });
-                } catch (err) {
-                    alert("Error: " + err.message);
-                }
-                setLoading(false);
+                    const userData = { nombre: m.n, usuario: m.u.trim().toLowerCase(), password: m.p, esMaestro: true, mustChangeCode: false };
+                    const res = await getColRef('admins').add(userData);
+                    alert("¡Maestro Activado! Entra con ID: " + userData.usuario); 
+                    onComplete({ id: res.id, ...userData });
+                } catch (e) { alert("Error: " + e.message); }
+                setIsSaving(false);
             };
 
             return (
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-screen animate-fade-in relative overflow-hidden">
+                    <div className="bg-white p-12 rounded-[4rem] shadow-2xl w-full max-w-md text-center border-t-8 border-blue-600">
+                        <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl"><Icon name="key" className="w-10 h-10" /></div>
+                        <h2 className="text-3xl font-black uppercase text-slate-950 mb-2 leading-none tracking-tight">Activar Maestro</h2>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase mb-8">Defina el acceso principal definitivo</p>
+                        <form onSubmit={handle} className="space-y-4 text-left">
+                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nombre completo" onChange={e => setM({...m, n: e.target.value})} required />
+                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="ID de Usuario (ID de acceso)" onChange={e => setM({...m, u: e.target.value})} required />
+                            <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Clave maestra" onChange={e => setM({...m, p: e.target.value})} required />
+                            <input type="password" title="confirm" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Confirmar" onChange={e => setM({...m, c: e.target.value})} required />
+                            <button disabled={isSaving} className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase shadow-2xl mt-4 active:scale-95 disabled:opacity-50">
+                                {isSaving ? 'Configurando...' : 'Activar Maestro'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function GuardiaFlow({ agente, habitantes }) {
+            const [search, setSearch] = useState("");
+            const [sel, setSel] = useState(null);
+            const [vName, setVName] = useState("");
+            const [photo, setPhoto] = useState(null);
+            const [scanning, setScanning] = useState(false);
+
+            const handleReg = async () => {
+                try {
+                    await getColRef('bitacora').add({
+                        tipo: 'Visita', subtipo: 'Entrada', visitante: vName.toUpperCase(), habitanteNombre: sel.nombre, casa: sel.casa, timestamp: new Date().toISOString(), agente: agente.nombre, fotoINE: photo
+                    });
+                    alert("Acceso autorizado."); setSel(null); setVName(""); setPhoto(null);
+                } catch(e) { alert("Error al registrar."); }
+            };
+
+            const filtered = search.length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
+
+            return (
+                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20">
+                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 group">
+                        <Icon name="search" className="text-slate-300 w-10 h-10 group-focus-within:text-blue-500 transition-colors" />
+                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar habitante o lote..." value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filtered.map(h => (
+                            <div key={h.id} className={`bg-white rounded-[2.5rem] shadow-xl border-t-[12px] flex flex-col animate-fade-in ${h.disponibleVisitas ? 'border-emerald-500' : 'border-rose-600'}`}>
+                                <div className="p-6 space-y-5">
+                                    <div className="space-y-1">
+                                        <h4 className="font-black text-slate-900 uppercase text-lg truncate leading-tight">{h.nombre}</h4>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">LOTE: {h.casa}</p>
+                                    </div>
+                                    <div className={`py-4 rounded-2xl text-center shadow-inner border-2 ${h.disponibleVisitas ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                                        <span className="text-lg font-black uppercase tracking-tighter leading-none block">
+                                            {h.disponibleVisitas ? 'ACCESO PERMITIDO' : 'ACCESO BLOQUEADO'}
+                                        </span>
+                                        <span className="text-[10px] font-bold opacity-80 uppercase">Estado del Habitante</span>
+                                    </div>
+                                    <button disabled={!h.disponibleVisitas} onClick={() => setSel(h)} className={`w-full py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95 ${h.disponibleVisitas ? 'bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>Registrar Entrada</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {sel && (
+                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-6 backdrop-blur-md overflow-y-auto">
+                            <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100 overflow-hidden">
+                                <div className={`absolute top-0 left-0 w-full h-4 ${sel.disponibleVisitas ? 'bg-emerald-500' : 'bg-rose-600'}`}></div>
+                                <div className="space-y-2">
+                                    <h3 className="text-xl font-black uppercase text-slate-900 leading-none">Registro de Visita</h3>
+                                    <div className={`inline-block px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${sel.disponibleVisitas ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                        {sel.disponibleVisitas ? '✓ PERMITIDO' : '✕ BLOQUEADO'}
+                                    </div>
+                                </div>
+                                <div className="p-8 bg-slate-50 rounded-[3rem] border border-slate-100">
+                                    <p className="text-xl font-black text-slate-800 uppercase leading-none">{sel.nombre}</p>
+                                    <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest mt-1">LOTE {sel.casa}</p>
+                                </div>
+                                <div className="space-y-6 text-left">
+                                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest leading-none">Nombre del visitante</label><input autoFocus className="w-full p-5 bg-slate-50 rounded-3xl border-2 border-slate-100 font-bold outline-none focus:border-blue-500 transition-all text-center uppercase" value={vName} onChange={e => setVName(e.target.value)} /></div>
+                                    <button onClick={() => setScanning(true)} className={`w-full py-5 rounded-[1.5rem] border-2 border-dashed flex items-center justify-center gap-3 transition-all ${photo ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                        <Icon name="camera" className="w-8 h-8" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">{photo ? "IFE CAPTURADA" : "ESCANEAR INE"}</span>
+                                    </button>
+                                    {photo && <img src={photo} className="w-full h-32 object-cover rounded-2xl border shadow-inner" alt="Previo" />}
+                                </div>
+                                <div className="flex gap-4">
+                                    <button onClick={() => {setSel(null); setPhoto(null);}} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-xs">Cerrar</button>
+                                    <button disabled={!vName.trim()} onClick={handleReg} className="flex-1 py-5 bg-slate-950 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-2xl active:scale-95 transition-all disabled:opacity-20">Autorizar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {scanning && <IDScanner onCapture={(img) => { setPhoto(img); setScanning(false); }} onCancel={() => setScanning(false)} />}
+                </div>
+            );
+        }
+
+        function HabitanteModule({ habitante }) {
+            const [updating, setUpdating] = useState(false);
+            const clave = getClavePersonalizada(habitante.nombre, habitante.casa);
+            const toggle = async () => {
+                setUpdating(true);
+                await getColRef('habitantes').doc(habitante.id).update({ disponibleVisitas: !habitante.disponibleVisitas });
+                setUpdating(false);
+            };
+            return (
+                <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in">
+                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600"></div>
+                        <h2 className="text-2xl font-black uppercase tracking-tighter mb-8 mt-2 text-slate-900 leading-none">Pase Residencial</h2>
+                        <div className="bg-white p-4 rounded-[3.5rem] inline-block border-8 border-slate-50 shadow-inner mb-6 text-slate-900">
+                            <img src={getQRURL(clave)} className="w-56 h-56 mx-auto" alt="QR" />
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 w-full">
+                            <span className="text-[10px] font-black uppercase text-slate-400 block mb-1 tracking-widest">Identificador Único</span>
+                            <p className="font-black text-blue-600 text-2xl tracking-[0.2em] leading-none uppercase">{clave}</p>
+                        </div>
+                    </div>
+                    <button disabled={updating} onClick={toggle} className={`w-full py-8 rounded-[2.5rem] font-black uppercase text-sm tracking-widest shadow-2xl transition-all active:scale-95 border-b-8 ${habitante.disponibleVisitas ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-rose-50 border-rose-700 text-white'}`}>
+                        {updating ? <Icon name="loader-2" className="animate-spin mx-auto" /> : (habitante.disponibleVisitas ? '✓ Disponible' : '✕ Bloqueado')}
+                    </button>
+                </div>
+            );
+        }
+
+        const PortalButton = ({ icon, title, color, onClick }) => (
+            <button onClick={onClick} className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center justify-center gap-4 hover:scale-105 transition-all group active:scale-95 shadow-slate-200/40 w-full max-w-[150px] md:max-w-[200px]">
+                <div className={`p-5 md:p-6 rounded-[1.5rem] ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}><Icon name={icon} className="w-12 h-12" /></div>
+                <h3 className="text-[10px] md:text-sm font-black text-slate-900 uppercase leading-none">{title}</h3>
+            </button>
+        );
+
+        function PasswordChangeView({ user, role, onComplete }) {
+            const [pass, setPass] = useState("");
+            const [loading, setLoading] = useState(false);
+            const handleUpdate = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    const col = role === 'admin' ? 'admins' : (role === 'habitante' ? 'habitantes' : 'agentes');
+                    await getColRef(col).doc(user.id).update({ password: pass, mustChangeCode: false });
+                    onComplete({ ...user, password: pass, mustChangeCode: false });
+                } catch (err) { alert("Error: " + err.message); }
+                setLoading(false);
+            };
+            return (
                 <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-full animate-fade-in">
-                    <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-blue-600 relative overflow-hidden">
-                        <div className="absolute top-4 right-4 text-blue-100 opacity-20"><Icon name="shield" className="w-24 h-24" /></div>
-                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 relative z-10"><Icon name="lock" /></div>
-                        <h2 className="text-2xl font-black uppercase text-slate-900 mb-2 leading-none relative z-10 tracking-tighter">Nueva Clave</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-8 relative z-10">Define tu clave personal definitiva para continuar.</p>
-                        <form onSubmit={handleUpdate} className="space-y-4 relative z-10">
-                            <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nueva contraseña" value={pass} onChange={e => setPass(e.target.value)} required />
-                            <button disabled={loading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[10px] tracking-widest tracking-tight">
+                    <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-blue-600">
+                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><Icon name="lock" /></div>
+                        <h2 className="text-2xl font-black uppercase text-slate-900 mb-2 leading-none">Nueva Contraseña</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-8">Defina su clave definitiva para continuar</p>
+                        <form onSubmit={handleUpdate} className="space-y-4">
+                            <input type="password" title="p" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nueva clave" value={pass} onChange={(e) => setPass(e.target.value)} required />
+                            <button disabled={loading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl">
                                 {loading ? 'Actualizando...' : 'Guardar y Entrar'}
                             </button>
                         </form>
@@ -408,7 +535,6 @@
             );
         }
 
-        // --- App Principal ---
         function App() {
             const [user, setUser] = useState(null);
             const [role, setRole] = useState(null); 
@@ -418,24 +544,35 @@
             const [admins, setAdmins] = useState([]);
             const [logs, setLogs] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [dataReady, setDataReady] = useState(false);
             const [authStep, setAuthStep] = useState('portal');
 
             useEffect(() => {
-                auth.signInAnonymously().catch(e => console.error(e));
-                auth.onAuthStateChanged((u) => { if (u) { setUser(u); setLoading(false); } });
+                const init = async () => {
+                    try {
+                        await auth.signInAnonymously();
+                        auth.onAuthStateChanged((u) => { if (u) { setUser(u); } });
+                    } catch (e) { alert("Firebase Error: " + e.message); }
+                };
+                init();
             }, []);
 
             useEffect(() => {
                 if (!user) return;
-                const pathFn = (c) => db.collection(`artifacts/${appId}/public/data/${c}`);
-                const unsub1 = pathFn('habitantes').onSnapshot(s => setHabitantes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsub2 = pathFn('agentes').onSnapshot(s => setAgentes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsub3 = pathFn('bitacora').onSnapshot(s => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsub4 = pathFn('admins').onSnapshot(s => setAdmins(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsub1 = getColRef('habitantes').onSnapshot(s => setHabitantes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsub2 = getColRef('agentes').onSnapshot(s => setAgentes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsub3 = getColRef('bitacora').onSnapshot(s => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsub4 = getColRef('admins').onSnapshot(s => {
+                    setAdmins(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                    setDataReady(true);
+                    setLoading(false);
+                });
                 return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
             }, [user]);
 
             const handleLogin = (r, u, p) => {
+                if (!dataReady) return alert("Cargando base de datos, espere...");
+                const searchId = u.trim().toLowerCase();
                 const maestroExists = admins.some(a => a.esMaestro);
 
                 if (u === 'superuser' && p === 'tlahuiscalpantecutli') {
@@ -448,27 +585,31 @@
                     setRole('admin'); setAuthStep('dashboard'); return;
                 }
 
-                let source = r === 'guardia' ? agentes : (r === 'habitante' ? habitantes : (r === 'admin' ? admins : []));
-                const target = source.find(x => (x.usuario || x.id) === u && x.password === p);
-                if (target) { setActiveUser(target); setRole(r); setAuthStep('dashboard'); } 
-                else { alert("Credenciales incorrectas."); }
+                let src = r === 'guardia' ? agentes : (r === 'habitante' ? habitantes : admins);
+                const target = src.find(x => (x.usuario?.toLowerCase() === searchId || x.id === u) && x.password === p);
+                
+                if (target) { 
+                    setActiveUser(target); setRole(r); setAuthStep('dashboard'); 
+                } else { alert("ID o Clave incorrectos."); }
             };
+
+            const forceReset = () => { setRole(null); setActiveUser(null); setAuthStep('portal'); };
 
             if (loading) return (
                 <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-6">
-                    <div className="p-5 bg-blue-600 rounded-[2.5rem] shadow-2xl animate-bounce shadow-blue-500/20"><Icon name="shield" className="w-16 h-16" /></div>
-                    <h2 className="text-2xl font-black tracking-widest uppercase animate-pulse">VIYAUTEPEC</h2>
+                    <div className="p-5 bg-blue-600 rounded-[2.5rem] shadow-2xl animate-bounce"><Icon name="shield" className="w-16 h-16" /></div>
+                    <h2 className="text-2xl font-black tracking-widest uppercase animate-pulse">Iniciando...</h2>
                 </div>
             );
 
             if (authStep === 'portal') return (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-50 space-y-12 animate-fade-in h-screen">
                     <div className="text-center relative">
-                        <div className="p-4 bg-blue-600 text-white rounded-3xl inline-block shadow-2xl mb-6 shadow-blue-500/20"><Icon name="shield" className="w-12 h-12" /></div>
-                        <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter uppercase leading-none">Viyautepec 2a. Sección</h1>
-                        <p className="text-slate-400 font-bold text-sm md:text-base uppercase mt-2 tracking-widest opacity-80">(control de seguridad)</p>
+                        <div className="p-5 bg-blue-600 text-white rounded-3xl inline-block shadow-2xl mb-8 shadow-blue-500/20"><Icon name="shield" className="w-14 h-14" /></div>
+                        <h1 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter uppercase leading-none">Viyautepec 2a. Sección</h1>
+                        <p className="text-slate-400 font-bold text-sm md:text-lg uppercase mt-2 tracking-widest opacity-80">(control de seguridad)</p>
                     </div>
-                    <div className="flex flex-row justify-center items-stretch gap-4 md:gap-6 w-full max-w-4xl px-4">
+                    <div className="flex flex-row justify-center items-stretch gap-6 w-full max-w-4xl px-4">
                         <PortalButton icon="settings" title="ADMIN" color="bg-slate-900" onClick={() => setAuthStep('login_admin')} />
                         <PortalButton icon="user" title="HABITANTE" color="bg-blue-600" onClick={() => setAuthStep('login_habitante')} />
                         <PortalButton icon="shield-check" title="SEGURIDAD" color="bg-emerald-600" onClick={() => setAuthStep('login_guardia')} />
@@ -484,36 +625,30 @@
                         <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm border border-slate-100 text-center animate-fade-in relative overflow-hidden">
                             <div className={`absolute top-0 left-0 w-full h-2 ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}></div>
                             <div className="flex justify-center mb-6">
-                                <div className={`p-4 rounded-2xl text-white shadow-xl ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
-                                    <Icon name={mode === 'admin' ? "settings" : (mode === 'guardia' ? "shield-check" : "user")} className="w-8 h-8" />
+                                <div className={`p-5 rounded-2xl text-white shadow-xl ${mode === 'admin' ? 'bg-slate-900' : mode === 'guardia' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                                    <Icon name={mode === 'admin' ? "settings" : (mode === 'guardia' ? "shield-check" : "user")} className="w-10 h-10" />
                                 </div>
                             </div>
                             <h2 className="text-3xl font-black uppercase mb-1 tracking-tighter">Entrar</h2>
                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest">Módulo: {mode}</p>
-                            
-                            {mode === 'admin' && !maestroExists && (
-                                <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase tracking-widest animate-pulse border border-blue-100">
-                                    Configuración inicial: admin / 123
-                                </div>
-                            )}
-
+                            {mode === 'admin' && !maestroExists && <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-100 tracking-tighter leading-none">Configuración inicial: admin / 123</div>}
                             <form onSubmit={e => { e.preventDefault(); handleLogin(mode, e.target.u.value, e.target.p.value); }} className="space-y-4 text-left">
                                 {mode === 'habitante' ? (
                                     <select name="u" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" required>
-                                        <option value="">Seleccione Nombre...</option>
+                                        <option value="">Seleccione Habitante...</option>
                                         {habitantes.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
                                     </select>
                                 ) : <input name="u" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" placeholder="ID Usuario" required />}
                                 <input name="p" type="password" placeholder="Clave de acceso" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" required />
-                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[10px] tracking-widest">Ingresar</button>
-                                <button type="button" onClick={() => setAuthStep('portal')} className="w-full text-center text-slate-400 text-[10px] font-black uppercase mt-4">Regresar al portal</button>
+                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[11px] tracking-widest">Ingresar</button>
+                                <button type="button" onClick={() => setAuthStep('portal')} className="w-full text-center text-slate-400 text-[10px] font-black uppercase mt-4">Regresar</button>
                             </form>
                         </div>
                     </div>
                 );
             }
 
-            if (activeUser?.mustInit) return <MaestroReg onComplete={setActiveUser} />;
+            if (activeUser?.mustInit) return <MaestroReg onComplete={(data) => { setActiveUser(data); setRole('admin'); setAuthStep('dashboard'); }} />;
             if (activeUser?.mustChangeCode) return <PasswordChangeView user={activeUser} role={role} onComplete={setActiveUser} />;
 
             return (
@@ -522,7 +657,7 @@
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-xl shadow-lg border border-blue-400/20 shadow-blue-500/10"><Icon name="shield" className="w-4 h-4 text-white"/></div>
                             <div className="flex flex-col leading-none">
-                                <span className="font-black text-sm uppercase tracking-tight">VIYAUTEPEC</span>
+                                <span className="font-black text-sm uppercase tracking-tight tracking-tighter">VIYAUTEPEC</span>
                                 <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">2a. Sección</span>
                             </div>
                         </div>
@@ -537,147 +672,12 @@
                         </div>
                     </header>
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50">
-                        <div className="max-w-7xl mx-auto w-full h-full pb-24 no-print">
-                            {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} activeUser={activeUser} />}
+                        <div className="max-w-7xl mx-auto w-full h-full no-print">
+                            {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} activeUser={activeUser} onResetSuccess={forceReset} />}
                             {role === 'habitante' && <HabitanteModule habitante={habitantes.find(h => h.id === activeUser.id) || activeUser} />}
                             {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
                         </div>
                     </div>
-                </div>
-            );
-        }
-
-        const PortalButton = ({ icon, title, color, onClick }) => (
-            <button onClick={onClick} className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center justify-center gap-4 hover:scale-105 transition-all group active:scale-95 shadow-slate-200/40 w-full max-w-[140px] md:max-w-[200px]">
-                <div className={`p-4 md:p-6 rounded-[1.5rem] ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}><Icon name={icon} className="w-10 h-10" /></div>
-                <h3 className="text-[10px] md:text-sm font-black text-slate-900 uppercase leading-none">{title}</h3>
-            </button>
-        );
-
-        function MaestroReg({ onComplete }) {
-            const [m, setM] = useState({ n: '', p: '', c: '' });
-            const handle = async (e) => {
-                e.preventDefault();
-                if (m.p !== m.c) return alert("Las contraseñas no coinciden");
-                if (m.p.length < 5) return alert("La clave debe tener al menos 5 caracteres");
-                
-                try {
-                    const data = { nombre: m.n, usuario: 'admin_maestro', password: m.p, esMaestro: true, mustChangeCode: false };
-                    const res = await db.collection(`artifacts/${appId}/public/data/admins`).add(data);
-                    alert("Administrador Maestro establecido. El acceso admin/123 ha sido desactivado."); 
-                    onComplete({ id: res.id, ...data });
-                } catch (e) {
-                    alert("Error: " + e.message);
-                }
-            };
-            return (
-                <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-screen">
-                    <div className="bg-white p-12 rounded-[4rem] shadow-2xl w-full max-w-md text-center border-t-8 border-blue-600 animate-fade-in relative overflow-hidden">
-                        <div className="absolute top-8 right-8 opacity-10 rotate-12"><Icon name="shield" className="w-32 h-32" /></div>
-                        <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl relative z-10"><Icon name="key" className="w-10 h-10" /></div>
-                        <h2 className="text-2xl font-black uppercase text-slate-950 mb-2 tracking-tighter relative z-10 leading-none">Perfil Maestro</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-8 relative z-10">Define el acceso principal con control total</p>
-                        <form onSubmit={handle} className="space-y-4 text-left relative z-10">
-                            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Su nombre completo" onChange={e => setM({...m, n: e.target.value})} required />
-                            <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nueva clave maestra" onChange={e => setM({...m, p: e.target.value})} required />
-                            <input type="password" title="confirm" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Confirmar clave" onChange={e => setM({...m, c: e.target.value})} required />
-                            <button className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase shadow-2xl mt-4 active:scale-95 transition-all text-[11px] tracking-widest">Establecer Administrador</button>
-                        </form>
-                    </div>
-                </div>
-            );
-        }
-
-        function HabitanteModule({ habitante }) {
-            const [updating, setUpdating] = useState(false);
-            const clave = getClavePersonalizada(habitante.nombre, habitante.casa);
-            const handleToggle = async () => {
-                setUpdating(true);
-                await db.doc(`artifacts/${appId}/public/data/habitantes/${habitante.id}`).update({ disponibleVisitas: !habitante.disponibleVisitas });
-                setUpdating(false);
-            };
-            return (
-                <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in">
-                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600"></div>
-                        <h2 className="text-2xl font-black uppercase tracking-tighter mb-8 mt-2 text-slate-900 leading-none">Pase Residencial</h2>
-                        <div className="bg-white p-4 rounded-[3.5rem] inline-block border-8 border-slate-50 shadow-inner mb-6 text-slate-900">
-                            <img src={getQRURL(clave)} className="w-56 h-56 mx-auto" alt="QR" />
-                        </div>
-                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 w-full">
-                            <span className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest leading-none">Clave Única</span>
-                            <p className="font-black text-blue-600 text-2xl tracking-[0.2em] leading-none uppercase">{clave}</p>
-                        </div>
-                    </div>
-                    <button disabled={updating} onClick={handleToggle} className={`w-full py-7 rounded-[2.5rem] font-black uppercase text-sm tracking-widest shadow-2xl transition-all active:scale-95 border-b-8 ${habitante.disponibleVisitas ? 'bg-emerald-500 border-emerald-700 text-white shadow-emerald-200' : 'bg-rose-500 border-rose-700 text-white shadow-rose-200'}`}>
-                        {updating ? <Icon name="loader-2" className="w-6 h-6 animate-spin mx-auto" /> : (habitante.disponibleVisitas ? '✓ Disponible' : '✕ Bloqueado')}
-                    </button>
-                </div>
-            );
-        }
-
-        function GuardiaFlow({ agente, habitantes }) {
-            const [search, setSearch] = useState("");
-            const [sel, setSel] = useState(null);
-            const [vName, setVName] = useState("");
-            const [photo, setPhoto] = useState(null);
-            const [scanning, setScanning] = useState(false);
-
-            const handleReg = async () => {
-                const logsRef = db.collection(`artifacts/${appId}/public/data/bitacora`);
-                await logsRef.add({
-                    tipo: 'Visita', subtipo: 'Entrada', visitante: vName.toUpperCase(), habitanteNombre: sel.nombre, casa: sel.casa, timestamp: new Date().toISOString(), agente: agente.nombre, fotoINE: photo
-                });
-                alert("Acceso autorizado con éxito."); setSel(null); setVName(""); setPhoto(null);
-            };
-
-            const filtered = search.length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
-
-            return (
-                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20">
-                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group">
-                        <Icon name="search" className="text-slate-300 w-10 h-10 group-focus-within:text-blue-500 transition-colors" />
-                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Nombre o Lote..." value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filtered.map(h => (
-                            <div key={h.id} className={`bg-white rounded-[2.5rem] shadow-xl border-t-8 flex flex-col animate-fade-in ${h.disponibleVisitas ? 'border-emerald-500' : 'border-rose-500'}`}>
-                                <div className="p-6 space-y-4">
-                                    <div className="flex justify-between items-start gap-4">
-                                        <h4 className="font-black text-slate-950 uppercase text-sm truncate leading-tight flex-1">{h.nombre}</h4>
-                                        <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${h.disponibleVisitas ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{h.disponibleVisitas ? 'OK' : 'BLOQ'}</span>
-                                    </div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-none tracking-widest">LOTE: {h.casa}</p>
-                                    <button disabled={!h.disponibleVisitas} onClick={() => setSel(h)} className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg transition-all active:scale-95 ${h.disponibleVisitas ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>Registrar Visita</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    {sel && (
-                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-6 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100 overflow-hidden">
-                                <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
-                                <h3 className="text-xl font-black uppercase text-slate-900 leading-none tracking-tight">Nueva Visita</h3>
-                                <div className="p-8 bg-blue-50 rounded-[3rem] border border-blue-100">
-                                    <p className="text-xl font-black text-slate-800 uppercase leading-none">{sel.nombre}</p>
-                                    <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest mt-1">LOTE {sel.casa}</p>
-                                </div>
-                                <div className="space-y-6 text-left">
-                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">Nombre del visitante</label><input autoFocus className="w-full p-5 bg-slate-50 rounded-3xl border-2 border-slate-100 font-bold outline-none focus:border-blue-500 transition-all text-center uppercase" value={vName} onChange={e => setVName(e.target.value)} /></div>
-                                    <button onClick={() => setScanning(true)} className={`w-full py-5 rounded-[1.5rem] border-2 border-dashed flex items-center justify-center gap-3 transition-all ${photo ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
-                                        <Icon name="camera" className="w-8 h-8" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">{photo ? "IFE CAPTURADA" : "ESCANEAR INE"}</span>
-                                    </button>
-                                    {photo && <img src={photo} className="w-full h-32 object-cover rounded-2xl border shadow-inner" alt="Previo" />}
-                                </div>
-                                <div className="flex gap-4">
-                                    <button onClick={() => {setSel(null); setPhoto(null);}} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-xs">Cerrar</button>
-                                    <button disabled={!vName.trim()} onClick={handleReg} className="flex-1 py-5 bg-slate-950 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-2xl active:scale-95 transition-all disabled:opacity-20">Autorizar</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {scanning && <IDScanner onCapture={(img) => { setPhoto(img); setScanning(false); }} onCancel={() => setScanning(false)} />}
                 </div>
             );
         }
