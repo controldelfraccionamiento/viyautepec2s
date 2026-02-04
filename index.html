@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Viyautepec 2a Sección - Ver. 2.7</title>
+    <title>Viyautepec 2a Sección - Ver. 2.8</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y Babel Standalone -->
@@ -46,15 +46,15 @@
         .scanner-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
-            z-index: 10;
+            z-index: 10; pointer-events: none;
         }
         .scanner-mask {
             width: 85vw; height: 55vw; max-width: 500px; max-height: 320px;
             position: relative; border-radius: 24px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
-            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
         }
-        .scanner-corner { position: absolute; width: 40px; height: 40px; border: 5px solid #3b82f6; }
+        .scanner-corner { position: absolute; width: 45px; height: 45px; border: 6px solid #3b82f6; }
         .c-tl { top: -4px; left: -4px; border-right: 0; border-bottom: 0; border-radius: 20px 0 0 0; }
         .c-tr { top: -4px; right: -4px; border-left: 0; border-bottom: 0; border-radius: 0 20px 0 0; }
         .c-bl { bottom: -4px; left: -4px; border-right: 0; border-top: 0; border-radius: 0 0 0 20px; }
@@ -64,7 +64,7 @@
             body * { visibility: hidden !important; }
             #print-area, #print-area * { visibility: visible !important; }
             #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: auto !important; display: flex !important; align-items: center !important; justify-content: center !important; }
-            #print-area img { max-width: 12cm !important; width: 100% !important; height: auto !important; }
+            #print-area img { max-width: 15cm !important; width: 100% !important; height: auto !important; border-radius: 0.5cm !important; }
             .no-print { display: none !important; }
         }
     </style>
@@ -90,7 +90,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 2.7";
+        const VERSION = "Ver. 2.8";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
 
         const getColRef = (name) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
@@ -120,7 +120,7 @@
                 };
                 playTone(100, ctx.currentTime, 0.2);
                 playTone(100, ctx.currentTime + 0.25, 0.2);
-            } catch (e) { console.warn("AudioContext bloqueado"); }
+            } catch (e) { console.warn("Audio Context Error"); }
         };
 
         const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -139,7 +139,6 @@
                 "key": <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>,
                 "refresh-cw": <Fragment><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></Fragment>,
                 image: <Fragment><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Fragment>,
-                "alert-circle": <Fragment><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Fragment>,
                 x: <Fragment><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Fragment>
             };
             return (
@@ -149,7 +148,7 @@
             );
         };
 
-        // --- Componente: Escáner ---
+        // --- Componente: Escáner con Recorte Automático ---
         function IDScanner({ onCapture, onCancel, title = "Centre la identificación" }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -158,7 +157,9 @@
             useEffect(() => {
                 const init = async () => {
                     try {
-                        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } });
+                        const s = await navigator.mediaDevices.getUserMedia({ 
+                            video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                        });
                         setStream(s); if(videoRef.current) videoRef.current.srcObject = s;
                     } catch(e) { alert("Cámara no disponible."); onCancel(); }
                 };
@@ -167,20 +168,67 @@
             }, []);
 
             const capture = () => {
-                const ctx = canvasRef.current.getContext('2d');
-                canvasRef.current.width = videoRef.current.videoWidth;
-                canvasRef.current.height = videoRef.current.videoHeight;
-                ctx.drawImage(videoRef.current, 0, 0);
-                onCapture(canvasRef.current.toDataURL('image/jpeg', 0.8));
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+
+                // Resolución real del video
+                const vW = video.videoWidth;
+                const vH = video.videoHeight;
+
+                // Dimensiones del viewport (pantalla)
+                const viewW = window.innerWidth;
+                const viewH = window.innerHeight;
+
+                // Calcular dimensiones del marco guía en píxeles de pantalla
+                const maskW = Math.min(viewW * 0.85, 500);
+                const maskH = Math.min(viewW * 0.55, 320);
+
+                // Calcular escala (object-cover)
+                const scale = Math.max(viewW / vW, viewH / vH);
+                const displayedW = vW * scale;
+                const displayedH = vH * scale;
+
+                // Desplazamiento por centrado (object-cover)
+                const offsetX = (displayedW - viewW) / 2;
+                const offsetY = (displayedH - viewH) / 2;
+
+                // Coordenadas de origen en el stream de video real
+                const sx = ((viewW - maskW) / 2 + offsetX) / scale;
+                const sy = ((viewH - maskH) / 2 + offsetY) / scale;
+                const sw = maskW / scale;
+                const sh = maskH / scale;
+
+                // Configurar canvas de alta calidad (1.58:1 ratio INE)
+                canvas.width = 1200;
+                canvas.height = 760;
+
+                // Dibujar solo la porción recortada
+                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+                
+                onCapture(canvas.toDataURL('image/jpeg', 0.85));
+                if (stream) stream.getTracks().forEach(t => t.stop());
             };
 
             return (
-                <div className="fixed inset-0 bg-black z-[500] flex flex-col items-center justify-center font-sans">
+                <div className="fixed inset-0 bg-black z-[500] flex flex-col items-center justify-center font-sans overflow-hidden">
                     <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                    <div className="scanner-overlay"><div className="scanner-mask"><div className="scanner-corner c-tl"></div><div className="scanner-corner c-tr"></div><div className="scanner-corner c-bl"></div><div className="scanner-corner c-br"></div></div></div>
-                    <div className="absolute top-12 text-center w-full z-20 px-4"><p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block shadow-2xl">{title}</p></div>
-                    <div className="absolute bottom-12 flex justify-center gap-10 items-center z-20 w-full px-6">
-                        <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20 transition-transform active:scale-90"><Icon name="x" className="w-8 h-8" /></button>
+                    
+                    <div className="scanner-overlay">
+                        <div className="scanner-mask">
+                            <div className="scanner-corner c-tl"></div>
+                            <div className="scanner-corner c-tr"></div>
+                            <div className="scanner-corner c-bl"></div>
+                            <div className="scanner-corner c-br"></div>
+                        </div>
+                    </div>
+
+                    <div className="absolute top-12 text-center w-full z-20 px-4">
+                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block shadow-2xl">{title}</p>
+                    </div>
+                    
+                    <div className="absolute bottom-12 flex justify-center gap-12 items-center z-20 w-full px-6">
+                        <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20 active:scale-75 transition-all"><Icon name="x" className="w-8 h-8" /></button>
                         <button onClick={capture} className="w-24 h-24 bg-white rounded-full border-[10px] border-white/30 shadow-2xl active:scale-90 transition-all"></button>
                         <div className="w-16"></div>
                     </div>
@@ -205,7 +253,6 @@
 
             const isMaestro = activeUser?.esMaestro || role === 'superuser';
 
-            // Bitácora Diferenciada (Auditoría vs Operativa)
             const displayLogs = (() => {
                 if (role === 'superuser') return logs;
                 const moves = logs.filter(l => l.tipo === 'Visita' || l.tipo === 'Acceso Residente');
@@ -227,7 +274,7 @@
             };
 
             const deleteEntry = async (col, id, nombre) => {
-                if(!confirm(`¿Eliminar permanentemente a ${nombre}?`)) return;
+                if(!confirm(`¿Desea eliminar a ${nombre}?`)) return;
                 try { 
                     await getColRef(col).doc(id).delete(); 
                     await logAction('Sistema', 'Borrado', `Eliminó a ${nombre}`);
@@ -235,7 +282,7 @@
             };
 
             const resetLogs = async () => {
-                if(!confirm("¿Vaciar historial de bitácora por completo?")) return;
+                if(!confirm("¿Vaciar historial por completo?")) return;
                 setIsActionLoading(true);
                 try {
                     const snapshot = await getColRef('bitacora').get();
@@ -308,7 +355,7 @@
             };
 
             return (
-                <div className="space-y-4 animate-fade-in pb-24 h-full">
+                <div className="space-y-4 animate-fade-in pb-24 h-full font-sans">
                     <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-fit overflow-x-auto max-w-full no-print">
                         {['residentes', 'guardias', 'bitacora', (isMaestro ? 'administradores' : null)].filter(Boolean).map(t => (
                             <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
@@ -332,9 +379,9 @@
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-slate-50">
                                     {tab === 'bitacora' ? (
-                                        <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Fech/Hora</th><th className="px-6">Descripción</th><th className="text-center px-6">INE</th></tr>
+                                        <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Fech/Hora</th><th className="px-6">Descripción Movimiento</th><th className="text-center px-6">INE</th></tr>
                                     ) : (
-                                        <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Nombre</th><th className="px-6">Información</th>{isMaestro && <th className="text-right pr-10">Acciones</th>}</tr>
+                                        <tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Nombre</th><th className="px-6">Info</th>{isMaestro && <th className="text-right pr-10">Acciones</th>}</tr>
                                     )}
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -448,7 +495,7 @@
                         <div className="fixed inset-0 bg-slate-50 z-[400] p-6 overflow-y-auto font-sans">
                             <div className="max-w-md mx-auto py-10">
                                 <button onClick={() => setView('list')} className="mb-8 flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] active:scale-95"><Icon name="arrow-left"/> Volver</button>
-                                <h2 className="text-3xl font-black uppercase text-slate-900 mb-8 tracking-tighter leading-none font-black tracking-tight whitespace-nowrap">Registrar {tab}</h2>
+                                <h2 className="text-3xl font-black uppercase text-slate-900 mb-8 tracking-tighter leading-none font-black tracking-tight whitespace-nowrap uppercase">Registrar {tab}</h2>
                                 <form onSubmit={handleSave} className="space-y-5 text-left">
                                     <input className="w-full p-5 bg-white border rounded-[1.5rem] font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
                                     {tab === 'residentes' && <input className="w-full p-5 bg-white border rounded-[1.5rem] font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />}
@@ -471,7 +518,7 @@
                                 <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print">
                                     <div className="flex gap-3">
                                         <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 transition-all font-black uppercase"><Icon name="arrow-left" /> Regresar</button>
-                                        <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl shadow-blue-500/20 font-black"><Icon name="printer" /> Imprimir Credencial</button>
+                                        <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl shadow-blue-500/20 font-black"><Icon name="printer" /> Imprimir INE</button>
                                     </div>
                                     <button onClick={() => setSelectedPhoto(null)} className="text-white/50 hover:text-white transition-colors"><Icon name="x" className="w-6 h-6"/></button>
                                 </div>
@@ -571,7 +618,7 @@
                     <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20 shadow-blue-600/30">
                         <Icon name="shield" className="w-24 h-24 text-white shadow-2xl" />
                     </div>
-                    <h1 className="text-5xl md:text-7xl font-black text-center leading-none font-black tracking-tight whitespace-nowrap px-4">{TITULO_SISTEMA}</h1>
+                    <h1 className="text-5xl md:text-7xl font-black text-center leading-none font-black tracking-tighter px-4">{TITULO_SISTEMA}</h1>
                     <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40">{VERSION}</p>
                 </div>
             );
@@ -589,7 +636,7 @@
                                     <Icon name={loginError ? "alert-circle" : "lock"} className="w-8 h-8" />
                                 </div>
                             </div>
-                            <h2 className={`text-3xl font-black transition-colors duration-300 ${loginError ? 'text-rose-600' : 'text-slate-900'} leading-none font-black tracking-tight whitespace-nowrap`}>{TITULO_SISTEMA}</h2>
+                            <h2 className={`text-2xl font-black transition-colors duration-300 ${loginError ? 'text-rose-600' : 'text-slate-900'} leading-none font-black tracking-tighter`}>{TITULO_SISTEMA}</h2>
                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none mt-2 font-black">{VERSION}</p>
                             {loginError && <div className="mb-6 py-3 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase border border-rose-100 animate-fade-in">Datos Incorrectos</div>}
                             {!maestroExists && !loginError && <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase border border-blue-100 animate-pulse font-black uppercase">Activación: admin / 123</div>}
@@ -603,22 +650,20 @@
                 );
             }
 
-            if (activeUser?.mustInit) return <MaestroReg onComplete={(data) => { setActiveUser(data); setRole('admin'); setAuthStep('dashboard'); }} />;
-
             return (
                 <div className="h-full flex flex-col overflow-hidden bg-slate-50 animate-fade-in font-sans">
                     <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 no-print">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-xl shadow-lg border border-blue-400/20"><Icon name="shield" className="w-4 h-4 text-white"/></div>
+                            <div className="bg-blue-600 p-2 rounded-xl shadow-lg border border-blue-400/20 active:scale-95 transition-transform"><Icon name="shield" className="w-4 h-4 text-white"/></div>
                             <div className="flex flex-col leading-none font-black uppercase">
-                                <span className="text-sm tracking-tight tracking-tighter leading-none font-black whitespace-nowrap">{TITULO_SISTEMA}</span>
-                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1">CONTROL - {VERSION}</span>
+                                <span className="text-sm tracking-tight tracking-tighter leading-none font-black">{TITULO_SISTEMA}</span>
+                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1">SISTEMA CONTROL - {VERSION}</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="flex flex-col items-end text-right">
                                 <span className="text-[10px] font-black uppercase text-white leading-none mb-1 truncate max-w-[150px] font-black">{activeUser?.nombre}</span>
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none font-black leading-none">
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none font-black leading-none uppercase">
                                     {role === 'admin' ? (activeUser?.esMaestro ? 'Administrador Maestro' : 'Administrador Auxiliar') : role === 'guardia' ? 'Guardia de Seguridad' : role === 'superuser' ? 'Súper Usuario' : 'Residente'}
                                 </span>
                             </div>
@@ -640,7 +685,7 @@
             const [m, setM] = useState({ n: '', p: '', c: '' });
             const handle = async (e) => {
                 e.preventDefault();
-                if (m.p !== m.c) return alert("Las contraseñas no coinciden.");
+                if (m.p !== m.c) return alert("Contraseñas no coinciden.");
                 if (m.p.length < 5) return alert("Mínimo 5 caracteres.");
                 try {
                     const userData = { nombre: toTitleCase(m.n), password: m.p, esMaestro: true, mustChangeCode: false };
@@ -653,7 +698,7 @@
                 <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-screen animate-fade-in rounded-[3rem]">
                     <div className="bg-white p-12 rounded-[4rem] shadow-2xl w-full max-w-md text-center border-t-8 border-blue-600 relative z-10 font-sans">
                         <div className="p-5 bg-blue-600 text-white rounded-[2rem] inline-block mb-8 shadow-2xl"><Icon name="key" className="w-10 h-10"/></div>
-                        <h2 className="text-3xl font-black uppercase text-slate-950 mb-2 leading-none font-black tracking-tight">Activar Maestro</h2>
+                        <h2 className="text-3xl font-black uppercase text-slate-950 mb-2 leading-none font-black tracking-tight uppercase">Activar Maestro</h2>
                         <form onSubmit={handle} className="space-y-4 text-left mt-6">
                             <input className="w-full p-5 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="Su nombre completo" onChange={e => setM({...m, n: e.target.value})} required />
                             <input type="password" title="p" className="w-full p-5 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="Clave maestra (min 5)" onChange={e => setM({...m, p: e.target.value})} required />
