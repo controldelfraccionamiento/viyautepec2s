@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Viyautepec 2a Sección - Ver. 3.2</title>
+    <title>Viyautepec 2a Sección - Ver. 3.3</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y Babel Standalone -->
@@ -41,8 +41,16 @@
             30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
             40%, 60% { transform: translate3d(4px, 0, 0); }
         }
+
+        /* Flash Effect */
+        .camera-flash {
+            position: fixed; inset: 0; background: white; z-index: 1000;
+            pointer-events: none; opacity: 0;
+        }
+        .camera-flash.active { animation: flash-anim 0.4s ease-out; }
+        @keyframes flash-anim { 0% { opacity: 1; } 100% { opacity: 0; } }
         
-        /* Interfaz de Escáner de Precisión con Auto-Captura */
+        /* Interfaz de Escáner Pro */
         .scanner-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
@@ -52,12 +60,12 @@
             width: 88vw; height: 55.7vw;
             max-width: 500px; max-height: 316px;
             position: relative; border-radius: 20px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78);
             border: 2px solid rgba(255, 255, 255, 0.4);
         }
         .scanner-corner { 
             position: absolute; width: 45px; height: 45px; border: 6px solid #3b82f6; 
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
         }
         .c-tl { top: -6px; left: -6px; border-right: 0; border-bottom: 0; border-radius: 18px 0 0 0; }
         .c-tr { top: -6px; right: -6px; border-left: 0; border-bottom: 0; border-radius: 0 18px 0 0; }
@@ -67,13 +75,13 @@
         /* Anillo de Carga Automática */
         .auto-capture-ring {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 120px; height: 120px; z-index: 20; pointer-events: none;
+            width: 140px; height: 140px; z-index: 20; pointer-events: none;
         }
         .ring-svg { transform: rotate(-90deg); }
         .ring-circle {
-            fill: transparent; stroke: #3b82f6; stroke-width: 8;
+            fill: transparent; stroke: #3b82f6; stroke-width: 6;
             stroke-dasharray: 283; stroke-dashoffset: 283;
-            transition: stroke-dashoffset 1.5s linear;
+            transition: stroke-dashoffset 1.8s ease-in;
         }
         .detecting .ring-circle { stroke-dashoffset: 0; }
 
@@ -107,7 +115,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 3.2";
+        const VERSION = "Ver. 3.3";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
 
         const getColRef = (name) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
@@ -137,7 +145,7 @@
                 };
                 playTone(100, ctx.currentTime, 0.2);
                 playTone(100, ctx.currentTime + 0.25, 0.2);
-            } catch (e) { console.warn("Audio Context Error"); }
+            } catch (e) { console.warn("Audio error"); }
         };
 
         const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -165,13 +173,14 @@
             );
         };
 
-        // --- Componente: Escáner con Auto-Captura Inteligente ---
+        // --- Componente: Escáner de Alta Precisión ---
         function IDScanner({ onCapture, onCancel, title = "Centre la identificación" }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
             const guideRef = useRef(null);
             const [stream, setStream] = useState(null);
             const [isAutoDetecting, setIsAutoDetecting] = useState(false);
+            const [isFlashing, setIsFlashing] = useState(false);
             const autoTimer = useRef(null);
 
             useEffect(() => {
@@ -182,21 +191,20 @@
                                 facingMode: 'environment', 
                                 width: { ideal: 1920 }, 
                                 height: { ideal: 1080 },
-                                focusMode: 'continuous' 
+                                advanced: [{ focusMode: 'continuous' }, { exporsureMode: 'continuous' }]
                             }
                         };
                         const s = await navigator.mediaDevices.getUserMedia(constraints);
                         setStream(s); 
                         if(videoRef.current) videoRef.current.srcObject = s;
                         
-                        // Iniciar detección automática después de 2 segundos de calma
                         setTimeout(() => {
                             setIsAutoDetecting(true);
-                            autoTimer.current = setTimeout(capture, 2500); // 2.5s para asegurar enfoque
-                        }, 1000);
+                            autoTimer.current = setTimeout(capture, 2200); 
+                        }, 1200);
                         
                     } catch(e) { 
-                        alert("Habilite permisos de cámara."); 
+                        alert("Permita el acceso a la cámara."); 
                         onCancel(); 
                     }
                 };
@@ -208,38 +216,52 @@
             }, []);
 
             const capture = () => {
-                if (!videoRef.current) return;
+                if (!videoRef.current || !guideRef.current) return;
+                
                 const video = videoRef.current;
                 const guide = guideRef.current;
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
 
+                // Visual Flash
+                setIsFlashing(true);
+                setTimeout(() => setIsFlashing(false), 400);
+
+                // Dimensiones reales de la fuente
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
+
+                // Dimensiones del elemento visual
                 const rectVideo = video.getBoundingClientRect();
                 const rectGuide = guide.getBoundingClientRect();
 
+                // Calcular el escalado y el offset del "object-cover"
                 const videoRatio = vW / vH;
-                const screenRatio = rectVideo.width / rectVideo.height;
+                const elementRatio = rectVideo.width / rectVideo.height;
 
-                let renderedW, renderedH, offsetX = 0, offsetY = 0;
+                let actualRenderedWidth, actualRenderedHeight;
+                let offsetX = 0, offsetY = 0;
 
-                if (videoRatio > screenRatio) {
-                    renderedH = rectVideo.height;
-                    renderedW = renderedH * videoRatio;
-                    offsetX = (renderedW - rectVideo.width) / 2;
+                if (videoRatio > elementRatio) {
+                    actualRenderedHeight = rectVideo.height;
+                    actualRenderedWidth = actualRenderedHeight * videoRatio;
+                    offsetX = (actualRenderedWidth - rectVideo.width) / 2;
                 } else {
-                    renderedW = rectVideo.width;
-                    renderedH = renderedW / videoRatio;
-                    offsetY = (renderedH - rectVideo.height) / 2;
+                    actualRenderedWidth = rectVideo.width;
+                    actualRenderedHeight = actualRenderedWidth / videoRatio;
+                    offsetY = (actualRenderedHeight - rectVideo.height) / 2;
                 }
 
-                const scale = vW / renderedW;
+                // Factor de conversión pantalla -> sensor
+                const scale = vW / actualRenderedWidth;
+
+                // Coordenadas de recorte
                 const sx = (rectGuide.left - rectVideo.left + offsetX) * scale;
                 const sy = (rectGuide.top - rectVideo.top + offsetY) * scale;
                 const sw = rectGuide.width * scale;
                 const sh = rectGuide.height * scale;
 
+                // Configurar canvas de salida (Alta definición)
                 canvas.width = 1200;
                 canvas.height = 760;
 
@@ -247,12 +269,15 @@
                 ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
                 
-                onCapture(canvas.toDataURL('image/jpeg', 0.9));
+                const data = canvas.toDataURL('image/jpeg', 0.9);
+                onCapture(data);
+                
                 if (stream) stream.getTracks().forEach(t => t.stop());
             };
 
             return (
                 <div className="fixed inset-0 bg-black z-[500] flex flex-col items-center justify-center font-sans overflow-hidden">
+                    <div className={`camera-flash ${isFlashing ? 'active' : ''}`} />
                     <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                     
                     <div className="scanner-container">
@@ -262,8 +287,8 @@
                             
                             {isAutoDetecting && (
                                 <div className="auto-capture-ring">
-                                    <svg className="ring-svg" width="120" height="120">
-                                        <circle className="ring-circle" cx="60" cy="60" r="45" />
+                                    <svg className="ring-svg" width="140" height="140">
+                                        <circle className="ring-circle" cx="70" cy="70" r="45" />
                                     </svg>
                                 </div>
                             )}
@@ -271,15 +296,15 @@
                     </div>
 
                     <div className="absolute top-12 text-center w-full z-20 px-4">
-                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block shadow-2xl">
-                            {isAutoDetecting ? "ENFOQUE Y MANTENGA QUIETO" : "INICIANDO ESCÁNER..."}
+                        <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/70 py-3 rounded-full border border-white/20 px-8 inline-block shadow-2xl">
+                            {isAutoDetecting ? "ENFOQUE Y MANTENGA QUIETO" : "INICIANDO CÁMARA..."}
                         </p>
                     </div>
                     
                     <div className="absolute bottom-12 flex justify-center gap-12 items-center z-20 w-full px-6">
                         <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20 active:scale-75 transition-all"><Icon name="x" className="w-8 h-8" /></button>
                         <button onClick={capture} className="w-24 h-24 bg-white/10 rounded-full border-[10px] border-white/20 shadow-2xl active:scale-90 transition-all flex items-center justify-center">
-                            <div className="w-14 h-14 bg-white rounded-full"></div>
+                            <div className="w-14 h-14 bg-white rounded-full shadow-inner"></div>
                         </button>
                         <div className="w-16"></div>
                     </div>
@@ -327,7 +352,7 @@
             };
 
             const deleteEntry = async (col, id, nombre) => {
-                if(!confirm(`¿Desea eliminar permanentemente a ${nombre}?`)) return;
+                if(!confirm(`¿Desea eliminar a ${nombre}?`)) return;
                 try { 
                     await getColRef(col).doc(id).delete(); 
                     await logAction('Sistema', 'Borrado', `Eliminó registro: ${nombre}`);
@@ -342,7 +367,7 @@
                     const batch = db.batch();
                     snapshot.forEach(doc => batch.delete(doc.ref));
                     await batch.commit();
-                    alert("Bitácora reiniciada.");
+                    alert("Bitácora limpia.");
                 } catch (e) { alert("Error."); }
                 setIsActionLoading(false);
             };
@@ -394,8 +419,8 @@
                 setIsActionLoading(true);
                 const colName = tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins');
                 try {
-                    const nombreFinal = toTitleCase(form.nombre);
-                    const data = { nombre: nombreFinal, password: form.password, mustChangeCode: true };
+                    const finalName = toTitleCase(form.nombre);
+                    const data = { nombre: finalName, password: form.password, mustChangeCode: true };
                     if (tab === 'residentes') { data.casa = form.casa; data.disponibleVisitas = true; }
                     if (tab === 'administradores') data.esMaestro = false;
                     if (tab === 'guardias' && guardPhoto) data.fotoINE = guardPhoto;
@@ -423,7 +448,7 @@
                                     <button onClick={resetLogs} disabled={isActionLoading} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg border border-rose-500 active:scale-95 transition-all"><Icon name="trash" className="w-3 h-3" /> Vaciar Bitácora</button>
                                 )}
                                 {view === 'list' && tab !== 'bitacora' && (
-                                    <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg active:scale-95"><Icon name="plus-circle" /> Nuevo</button>
+                                    <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg active:scale-95 transition-all"><Icon name="plus-circle" /> Nuevo</button>
                                 )}
                             </div>
                         </div>
@@ -483,7 +508,7 @@
                                                 <br/><span className="text-[9px] opacity-60 text-blue-600 font-black uppercase tracking-widest">{l.subtipo || l.tipo} {l.autor ? `| ${l.autor}` : ''}</span>
                                             </td>
                                             <td className="text-center px-6">
-                                                {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-200 shadow-sm transition-colors"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 uppercase font-black">N/A</span>}
+                                                {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-200 shadow-sm transition-colors"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 font-black uppercase">N/A</span>}
                                             </td>
                                         </tr>
                                     ))}
@@ -499,8 +524,8 @@
                                 <div className="p-4 bg-slate-50 text-slate-900 rounded-2xl inline-block mb-6"><Icon name="edit" className="w-8 h-8"/></div>
                                 <h3 className="text-xl font-black uppercase text-slate-900 mb-1 leading-none font-black tracking-tight">Corregir Habitante</h3>
                                 <form onSubmit={handleResidentUpdate} className="space-y-4 text-left mt-6">
-                                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Nombre</label><input name="editName" defaultValue={editResident.nombre} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" required /></div>
-                                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Lote</label><input name="editHouse" defaultValue={editResident.casa} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" required /></div>
+                                    <input name="editName" defaultValue={editResident.nombre} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" required />
+                                    <input name="editHouse" defaultValue={editResident.casa} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" required />
                                     <div className="flex gap-3 pt-4">
                                         <button type="button" onClick={() => setEditResident(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cerrar</button>
                                         <button type="submit" disabled={isActionLoading} className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Actualizar</button>
@@ -516,7 +541,7 @@
                                 <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl inline-block mb-6"><Icon name="edit" className="w-8 h-8"/></div>
                                 <h3 className="text-xl font-black uppercase text-slate-900 mb-1 leading-none font-black tracking-tight">Editar Guardia</h3>
                                 <form onSubmit={handleGuardUpdate} className="space-y-4 text-left mt-6">
-                                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Nombre Guardia</label><input name="editGuardName" defaultValue={editGuard.nombre} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-100" required /></div>
+                                    <input name="editGuardName" defaultValue={editGuard.nombre} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" required />
                                     <div className="flex gap-3 pt-4">
                                         <button type="button" onClick={() => setEditGuard(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cerrar</button>
                                         <button type="submit" disabled={isActionLoading} className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Actualizar</button>
@@ -533,7 +558,7 @@
                                 <h3 className="text-xl font-black uppercase text-slate-900 mb-1 leading-none tracking-tight">Reset Clave</h3>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-8">{passRecovery.nombre}</p>
                                 <form onSubmit={handlePassRecovery} className="space-y-4">
-                                    <input name="newpass" type="password" placeholder="Nueva contraseña (min 5)" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" required autoFocus />
+                                    <input name="newpass" type="password" placeholder="Nueva clave (min 5)" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" required autoFocus />
                                     <div className="flex gap-3">
                                         <button type="button" onClick={() => setPassRecovery(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cerrar</button>
                                         <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-blue-500/20">Actualizar</button>
@@ -583,6 +608,7 @@
             );
         }
 
+        // --- App Principal ---
         function App() {
             const [showSplash, setShowSplash] = useState(true);
             const [user, setUser] = useState(null);
@@ -625,7 +651,7 @@
             }, [user]);
 
             const handleLogin = async (nameInput, passInput) => {
-                if (!dataReady) return alert("Conectando...");
+                if (!dataReady) return alert("Sincronizando...");
                 const formattedName = toTitleCase(nameInput.trim());
                 const maestroExists = admins.some(a => a.esMaestro);
 
@@ -680,7 +706,7 @@
                             <h2 className={`text-2xl font-black transition-colors duration-300 ${loginError ? 'text-rose-600' : 'text-slate-900'} leading-none font-black tracking-tighter`}>{TITULO_SISTEMA}</h2>
                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none mt-2 font-black">{VERSION}</p>
                             {loginError && <div className="mb-6 py-3 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase border border-rose-100 animate-fade-in font-black">Datos Incorrectos</div>}
-                            {!maestroExists && !loginError && <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase border border-blue-100 animate-pulse font-black uppercase tracking-tight">Activación Maestro: admin / 123</div>}
+                            {!maestroExists && !loginError && <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase border border-blue-100 animate-pulse font-black uppercase">Activación Maestro: admin / 123</div>}
                             <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, e.target.pass.value); }} className="space-y-4 text-left font-black">
                                 <input name="name" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" placeholder="Nombre completo" required />
                                 <input name="pass" type="password" placeholder="Contraseña" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" required />
@@ -700,7 +726,7 @@
                             <div className="bg-blue-600 p-2 rounded-xl shadow-lg border border-blue-400/20 active:scale-95 transition-transform"><Icon name="shield" className="w-4 h-4 text-white"/></div>
                             <div className="flex flex-col leading-none font-black uppercase">
                                 <span className="text-sm tracking-tight tracking-tighter leading-none font-black whitespace-nowrap">{TITULO_SISTEMA}</span>
-                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1 uppercase leading-none font-black tracking-tight">CONTROL - {VERSION}</span>
+                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1 uppercase leading-none font-black tracking-tight">SISTEMA CONTROL - {VERSION}</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4 font-sans font-black">
