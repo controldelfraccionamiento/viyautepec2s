@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Viyautepec 2a. Sección - Control de Accesos</title>
+    <title>Viyautepec 2a. Sección - Rev. 1.2</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y Babel Standalone -->
@@ -30,7 +30,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes splashOut { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
         
-        /* Guía de Escáner de Identificación Mejorada */
+        /* Guía de Escáner de Identificación Pro */
         .scanner-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
@@ -39,7 +39,7 @@
         .scanner-mask {
             width: 85vw; height: 55vw; max-width: 500px; max-height: 320px;
             position: relative; border-radius: 24px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 2px solid rgba(255, 255, 255, 0.2);
         }
         .scanner-corner {
@@ -54,7 +54,7 @@
             body * { visibility: hidden !important; }
             #print-area, #print-area * { visibility: visible !important; }
             #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; }
-            #print-area img { max-width: 10cm !important; width: 100% !important; height: auto !important; border: none !important; box-shadow: none !important; }
+            #print-area img { max-width: 12cm !important; width: 100% !important; height: auto !important; border: none !important; box-shadow: none !important; }
             .no-print { display: none !important; }
         }
     </style>
@@ -65,7 +65,7 @@
     <script type="text/babel">
         const { useState, useEffect, Fragment, useRef } = React;
 
-        // --- Firebase Configuration ---
+        // --- Configuración de Firebase ---
         const firebaseConfig = {
             apiKey: "AIzaSyCu2kV9s9ZCmQCFElHZaf7vXPUKStVAh9o",
             authDomain: "viyautepec2seccion.firebaseapp.com",
@@ -82,10 +82,11 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
+        const REVISION = "Rev. 1.2";
 
         const getColRef = (name) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
 
-        // --- Utilidades de Formato ---
+        // --- Utilidades ---
         const toTitleCase = (str) => {
             if (!str) return "";
             return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -128,7 +129,7 @@
             );
         };
 
-        // --- Componente: Escáner ID ---
+        // --- Componente: Escáner ID Pro ---
         function IDScanner({ onCapture, onCancel, title = "Capture la identificación" }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -157,6 +158,7 @@
             return (
                 <div className="fixed inset-0 bg-black z-[500] flex flex-col items-center justify-center">
                     <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                    
                     <div className="scanner-overlay">
                         <div className="scanner-mask">
                             <div className="scanner-corner c-tl"></div>
@@ -165,9 +167,11 @@
                             <div className="scanner-corner c-br"></div>
                         </div>
                     </div>
+
                     <div className="absolute top-12 left-0 w-full text-center z-20 px-4">
                         <p className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 py-3 rounded-full border border-white/10 px-8 inline-block shadow-2xl">{title}</p>
                     </div>
+                    
                     <div className="absolute bottom-12 flex justify-center gap-10 items-center z-20 w-full px-6">
                         <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20"><Icon name="x" className="w-8 h-8" /></button>
                         <button onClick={capture} className="w-24 h-24 bg-white rounded-full border-[10px] border-white/30 shadow-2xl active:scale-90 transition-all"></button>
@@ -192,11 +196,13 @@
 
             const deleteEntry = async (col, id) => {
                 if(!confirm("¿Seguro que desea eliminar este registro permanentemente?")) return;
-                try { await getColRef(col).doc(id).delete(); } catch (e) { alert("Error: " + e.message); }
+                try {
+                    await getColRef(col).doc(id).delete();
+                } catch (e) { alert("Error: " + e.message); }
             };
 
             const resetAdministrators = async () => {
-                if(!confirm("PELIGRO: Se borrarán todos los administradores. ¿Desea continuar?")) return;
+                if(!confirm("PELIGRO: Se borrarán todos los administradores. ¿Continuar?")) return;
                 setIsActionLoading(true);
                 try {
                     const snapshot = await getColRef('admins').get();
@@ -212,6 +218,7 @@
             const handleSave = async (e) => {
                 e.preventDefault();
                 if (form.password.length < 5) return alert("Mínimo 5 caracteres para la contraseña.");
+                
                 setIsActionLoading(true);
                 const colName = tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins');
                 try {
@@ -224,8 +231,9 @@
                     if (tab === 'residentes') data.disponibleVisitas = true;
                     if (tab === 'administradores') data.esMaestro = false;
                     if (tab === 'guardias' && guardPhoto) data.fotoINE = guardPhoto;
+
                     await getColRef(colName).add(data);
-                    alert("Guardado.");
+                    alert("Guardado correctamente.");
                     setForm({ nombre: '', casa: '', usuario: '', password: '' });
                     setGuardPhoto(null);
                     setView('list');
@@ -248,7 +256,7 @@
                             <h2 className="text-2xl font-black uppercase text-slate-800 tracking-tight">{tab}</h2>
                             <div className="flex gap-3">
                                 {role === 'superuser' && tab === 'administradores' && (
-                                    <button onClick={resetAdministrators} disabled={isActionLoading} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg disabled:opacity-50">
+                                    <button onClick={resetAdministrators} disabled={isActionLoading} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg disabled:opacity-50 transition-all border border-rose-500">
                                         <Icon name="refresh-cw" className={isActionLoading ? 'animate-spin' : ''} /> Reiniciar Admins
                                     </button>
                                 )}
@@ -263,19 +271,19 @@
                         {view === 'add' ? (
                             <div className="max-w-md mx-auto py-4 animate-fade-in">
                                 <form onSubmit={handleSave} className="space-y-5">
-                                    <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+                                    <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-50" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
                                     {tab === 'residentes' ? (
-                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />
+                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />
                                     ) : (
-                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="ID Usuario" value={form.usuario} onChange={e => setForm({...form, usuario: e.target.value})} required />
+                                        <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="ID de Usuario" value={form.usuario} onChange={e => setForm({...form, usuario: e.target.value})} required />
                                     )}
-                                    <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" placeholder="Clave inicial (min 5 car.)" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
+                                    <input type="password" title="password" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" placeholder="Clave inicial (min 5 car.)" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
                                     {tab === 'guardias' && (
                                         <div className="space-y-2">
                                             <button type="button" onClick={() => setIsScanningGuard(true)} className={`w-full py-4 border-2 border-dashed rounded-2xl flex items-center justify-center gap-3 transition-all ${guardPhoto ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
                                                 <Icon name="camera" /> {guardPhoto ? "FOTO ID GUARDADA" : "TOMAR FOTO INE GUARDIA"}
                                             </button>
-                                            {guardPhoto && <img src={guardPhoto} className="w-full h-24 object-cover rounded-xl border" />}
+                                            {guardPhoto && <img src={guardPhoto} className="w-full h-24 object-cover rounded-xl border" alt="Previo" />}
                                         </div>
                                     )}
                                     <div className="flex gap-4 pt-4">
@@ -283,7 +291,7 @@
                                         <button type="submit" className="flex-1 py-4 bg-slate-900 text-white font-black uppercase rounded-2xl text-[10px] shadow-xl">Registrar</button>
                                     </div>
                                 </form>
-                                {isScanningGuard && <IDScanner title="Captura de ID de Guardia" onCapture={(img) => { setGuardPhoto(img); setIsScanningGuard(false); }} onCancel={() => setIsScanningGuard(false)} />}
+                                {isScanningGuard && <IDScanner title="Fotografía ID Guardia" onCapture={(img) => { setGuardPhoto(img); setIsScanningGuard(false); }} onCancel={() => setIsScanningGuard(false)} />}
                             </div>
                         ) : (
                             <div className="overflow-x-auto rounded-3xl border border-slate-100 font-medium">
@@ -347,10 +355,10 @@
                             <div className="max-w-3xl w-full flex flex-col gap-4">
                                 <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print">
                                     <div className="flex gap-3">
-                                        <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 transition-all">
+                                        <button onClick={() => setSelectedPhoto(null)} className="px-5 py-2 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 transition-all">
                                             <Icon name="arrow-left" className="w-4 h-4" /> Regresar
                                         </button>
-                                        <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl shadow-blue-500/20">
+                                        <button onClick={() => window.print()} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl shadow-blue-500/20">
                                             <Icon name="printer" className="w-4 h-4" /> Imprimir Credencial
                                         </button>
                                     </div>
@@ -424,7 +432,7 @@
             return (
                 <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20">
                     <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 group">
-                        <Icon name="search" className="text-slate-300 w-10 h-10 group-focus-within:text-blue-500" />
+                        <Icon name="search" className="text-slate-300 w-10 h-10 transition-colors group-focus-within:text-blue-500" />
                         <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar habitante..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -434,9 +442,9 @@
                                     <h4 className="font-black text-slate-900 uppercase text-lg truncate leading-tight font-black">{h.nombre}</h4>
                                     <div className={`py-4 rounded-2xl text-center border-2 ${h.disponibleVisitas ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
                                         <span className="text-lg font-black uppercase tracking-tighter block leading-none">{h.disponibleVisitas ? 'PERMITIDO' : 'BLOQUEADO'}</span>
-                                        <span className="text-[9px] font-bold opacity-60 uppercase mt-1 block">Estado del Habitante</span>
+                                        <span className="text-[9px] font-bold opacity-60 uppercase mt-1 block tracking-widest">Estado Habitante</span>
                                     </div>
-                                    <button disabled={!h.disponibleVisitas} onClick={() => setSel(h)} className={`w-full py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95 ${h.disponibleVisitas ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>Registrar Visita</button>
+                                    <button disabled={!h.disponibleVisitas} onClick={() => setSel(h)} className={`w-full py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95 ${h.disponibleVisitas ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-300'}`}>Registrar Visita</button>
                                 </div>
                             </div>
                         ))}
@@ -444,7 +452,7 @@
                     {sel && (
                         <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-6 backdrop-blur-md overflow-y-auto">
                             <div className="bg-white p-10 rounded-[3.5rem] w-full max-w-md space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100">
-                                <h3 className="text-xl font-black uppercase text-slate-900 leading-none">Nueva Visita</h3>
+                                <h3 className="text-xl font-black uppercase text-slate-900 leading-none tracking-tight">Nueva Visita</h3>
                                 <div className="p-8 bg-slate-50 rounded-[3rem] border border-slate-100">
                                     <p className="text-xl font-black text-slate-800 uppercase leading-none">{sel.nombre}</p>
                                     <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest mt-1">LOTE {sel.casa}</p>
@@ -489,13 +497,13 @@
                         </div>
                     </div>
                     <button disabled={updating} onClick={toggle} className={`w-full py-8 rounded-[2.5rem] font-black uppercase text-sm tracking-widest shadow-2xl transition-all active:scale-95 border-b-8 ${habitante.disponibleVisitas ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-rose-50 border-rose-700 text-white'}`}>
-                        {updating ? <Icon name="loader" className="animate-spin mx-auto w-6 h-6" /> : (habitante.disponibleVisitas ? 'Acceso Permitido' : 'Acceso Bloqueado')}
+                        {updating ? <Icon name="loader" className="animate-spin mx-auto w-6 h-6" /> : (habitante.disponibleVisitas ? 'Disponible para visitas' : 'Visitas bloqueadas')}
                     </button>
                 </div>
             );
         }
 
-        // --- App ---
+        // --- Main App ---
         function App() {
             const [showSplash, setShowSplash] = useState(true);
             const [user, setUser] = useState(null);
@@ -560,15 +568,16 @@
                 const habFound = habitantes.find(h => h.id === u && h.password === p);
                 if (habFound) { setActiveUser(habFound); setRole('habitante'); setAuthStep('dashboard'); return; }
 
-                alert("ID o Clave incorrectos.");
+                alert("Credenciales no válidas.");
             };
 
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white animate-splash-out">
-                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8">
-                        <Icon name="shield" className="w-24 h-24" />
+                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20">
+                        <Icon name="shield" className="w-24 h-24 text-white shadow-2xl" />
                     </div>
                     <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-center leading-none">VIYAUTEPEC<br/><span className="text-blue-500 text-3xl font-black">2a. Sección</span></h1>
+                    <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40">{REVISION}</p>
                 </div>
             );
 
@@ -583,22 +592,20 @@
                             <div className="flex justify-center mb-6">
                                 <div className="p-4 bg-slate-900 text-white rounded-2xl shadow-xl shadow-slate-900/20"><Icon name="lock" className="w-8 h-8" /></div>
                             </div>
-                            <h2 className="text-3xl font-black uppercase mb-1 tracking-tighter text-slate-900">Bienvenido</h2>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none">Seguridad Viyautepec</p>
+                            <h2 className="text-3xl font-black uppercase mb-1 tracking-tighter text-slate-900 leading-none">Viyautepec</h2>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none">Seguridad Residencial - {REVISION}</p>
                             {!maestroExists && (
                                 <div className="mb-6 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-bold uppercase border border-blue-100 animate-pulse">Activación: admin / 123</div>
                             )}
                             <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.u.value, e.target.p.value); }} className="space-y-4 text-left">
                                 <input name="u" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" placeholder="ID de Usuario" required />
                                 <input name="p" type="password" placeholder="Contraseña" className="w-full p-4 bg-slate-50 rounded-2xl border font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100" required />
-                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[11px] tracking-widest tracking-tight">Entrar al Sistema</button>
+                                <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl hover:bg-black transition-all text-[11px] tracking-widest tracking-tight">Acceder al Sistema</button>
                             </form>
                         </div>
                     </div>
                 );
             }
-
-            if (activeUser?.mustInit) return <MaestroReg onComplete={(data) => { setActiveUser(data); setRole('admin'); setAuthStep('dashboard'); }} />;
 
             return (
                 <div className="h-full flex flex-col overflow-hidden bg-slate-50 animate-fade-in font-sans">
@@ -607,7 +614,7 @@
                             <div className="bg-blue-600 p-2 rounded-xl shadow-lg border border-blue-400/20"><Icon name="shield" className="w-4 h-4 text-white"/></div>
                             <div className="flex flex-col leading-none font-black">
                                 <span className="text-sm uppercase tracking-tight">VIYAUTEPEC</span>
-                                <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">2a. Sección</span>
+                                <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">2a. Sección - {REVISION}</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
