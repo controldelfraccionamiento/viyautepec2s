@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Viyautepec 2a Sección - Ver. 8.2</title>
+    <title>Viyautepec 2a Sección - Ver. 8.7</title>
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -13,37 +13,28 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <!-- OCR Library -->
-    <script src="https://unpkg.com/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@v5.0.3/dist/tesseract.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         
-        :root { --overscroll-behavior: none; }
-
+        :root { --overscroll: none; }
         body, html { 
-            margin: 0; padding: 0; height: 100vh; width: 100vw; 
+            margin: 0; padding: 0; height: 100%; width: 100%; 
             font-family: 'Inter', sans-serif; background-color: #f8fafc; 
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: var(--overscroll-behavior);
+            overscroll-behavior-y: var(--overscroll);
         }
-
         #root { height: 100%; display: flex; flex-direction: column; }
+        .font-black { font-weight: 900 !important; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         .animate-splash-out { animation: splashOut 0.5s ease-in forwards; animation-delay: 2.7s; }
-        
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes splashOut { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
 
-        .camera-flash {
-            position: fixed; inset: 0; background: white; z-index: 1000;
-            pointer-events: none; opacity: 0;
-        }
-        .camera-flash.active { animation: flash-anim 0.3s ease-out; }
-        @keyframes flash-anim { 0% { opacity: 1; } 100% { opacity: 0; } }
-        
+        /* Estilos Cámara y Escaneo */
         .scanner-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
@@ -53,14 +44,14 @@
             width: 88vw; height: 55.7vw;
             max-width: 460px; max-height: 290px;
             position: relative; border-radius: 20px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.82);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 2px solid rgba(255, 255, 255, 0.5);
         }
-        .scanner-corner { position: absolute; width: 40px; height: 40px; border: 6px solid #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
-        .c-tl { top: -6px; left: -6px; border-right: 0; border-bottom: 0; border-radius: 18px 0 0 0; }
-        .c-tr { top: -6px; right: -6px; border-left: 0; border-bottom: 0; border-radius: 0 18px 0 0; }
-        .c-bl { bottom: -6px; left: -6px; border-right: 0; border-top: 0; border-radius: 0 0 0 18px; }
-        .c-br { bottom: -6px; right: -6px; border-left: 0; border-top: 0; border-radius: 0 0 18px 0; }
+        .scanner-corner { position: absolute; width: 30px; height: 30px; border: 5px solid #3b82f6; }
+        .c-tl { top: -5px; left: -5px; border-right: 0; border-bottom: 0; border-radius: 15px 0 0 0; }
+        .c-tr { top: -5px; right: -5px; border-left: 0; border-bottom: 0; border-radius: 0 15px 0 0; }
+        .c-bl { bottom: -5px; left: -5px; border-right: 0; border-top: 0; border-radius: 0 0 0 15px; }
+        .c-br { bottom: -5px; right: -5px; border-left: 0; border-top: 0; border-radius: 0 0 15px 0; }
 
         .auto-capture-ring {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -73,6 +64,7 @@
         }
         .detecting .ring-circle { stroke-dashoffset: 0; }
 
+        /* Sello Bloqueado */
         .diagonal-strike {
             position: absolute;
             top: 50%; left: 50%;
@@ -80,37 +72,27 @@
             white-space: nowrap;
             z-index: 40;
             pointer-events: none;
-            padding: 1px 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid #ef4444;
+            padding: 2px 5px;
+            border: 1.5px solid #ef4444;
             color: #ef4444;
             font-size: 8px;
             font-weight: 900;
-            border-radius: 3px;
+            border-radius: 2px;
             text-transform: uppercase;
         }
 
-        /* FIX PARA TECLADO VIRTUAL */
-        .keyboard-aware-modal {
+        /* Keyboard Adjustment - Improved for mobile */
+        .keyboard-safe-area {
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            justify-content: flex-end; 
+            min-height: 100dvh; 
+            padding: 16px;
+            overflow-y: auto;
         }
-        @media (max-height: 500px) {
-            .keyboard-aware-modal {
-                justify-content: flex-start;
-                padding-top: 10px;
-            }
+        @media (min-height: 700px) {
+            .keyboard-safe-area { justify-content: center; }
         }
-
-        .responsive-title {
-            font-size: clamp(1.5rem, 8vw, 4.5rem);
-            line-height: 1.1;
-            font-weight: 900;
-        }
-        input, select, textarea { font-size: 16px !important; }
     </style>
 </head>
 <body class="font-black">
@@ -133,8 +115,28 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 8.2";
+        const VERSION = "Ver. 8.7";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
+
+        // --- Audio Management ---
+        let audioCtx = null;
+        const prepareAudio = () => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        };
+
+        const playBeep = (freq = 1300, duration = 0.3) => {
+            prepareAudio();
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {}
+        };
 
         const CATEGORIAS_ACCESO = [
             { id: 'visita', label: 'Visita', icon: 'user', color: 'emerald' },
@@ -143,21 +145,6 @@
             { id: 'empleado', label: 'Empleado', icon: 'worker-helmet', color: 'amber' },
             { id: 'construccion', label: 'Mat. Construcción', icon: 'truck', color: 'slate' }
         ];
-
-        const playSuccessBeep = () => {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(1200, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime);
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.3);
-            } catch (err) {}
-        };
 
         const getColRef = (name) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
         const toTitleCase = (str) => str ? str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : "";
@@ -179,7 +166,7 @@
                 key: <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>,
                 package: <Fragment><path d="M16.5 9.4L7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></Fragment>,
                 motorcycle: <path d="M5 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm14 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 18h12m-9 0 1-4h5l1 4m-7-4h6l-1-4h-4zM16 10l-1.5-3h-5L8 10"/>,
-                "worker-helmet": <path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M8 5a5 5 0 0 1 8 0M12 2v3" stroke="currentColor" strokeWidth="2" fill="none" />,
+                "worker-helmet": <Fragment><path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M8 5a5 5 0 0 1 8 0M12 2v3"/></Fragment>,
                 truck: <path d="M1 3h15v13H1V3zm15 5h4l3 3v5h-7V8zM5.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>,
                 image: <Fragment><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Fragment>,
                 "log-out": <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/>,
@@ -195,11 +182,11 @@
             );
         };
 
-        function PasswordInput({ name, placeholder, value, onChange }) {
+        function PasswordInput({ placeholder, value, onChange }) {
             const [show, setShow] = useState(false);
             return (
                 <div className="relative">
-                    <input name={name} type={show ? "text" : "password"} placeholder={placeholder} value={value} onChange={onChange} className="w-full p-4 pr-12 bg-white border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100 shadow-sm" required />
+                    <input type={show ? "text" : "password"} placeholder={placeholder} value={value} onChange={onChange} className="w-full p-4 pr-12 bg-white border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100" required />
                     <button type="button" onClick={() => setShow(!show)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
                         <Icon name={show ? "eye-off" : "eye"} className="w-5 h-5" />
                     </button>
@@ -207,7 +194,7 @@
             );
         }
 
-        // --- Escáner IA con Captura Automática Inteligente y Beep ---
+        // --- Módulo de Escaneo IA ---
         function IDScannerWidget({ onCapture, onCancel }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -215,45 +202,26 @@
             const [isFlashing, setIsFlashing] = useState(false);
             const [processing, setProcessing] = useState(false);
             const [isSteady, setIsSteady] = useState(false);
-            const autoTimer = useRef(null);
+            const timerRef = useRef(null);
 
             useEffect(() => {
-                const constraints = { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } };
-                navigator.mediaDevices.getUserMedia(constraints)
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } })
                 .then(s => { 
                     if(videoRef.current) videoRef.current.srcObject = s;
-                    setTimeout(() => {
-                        setIsSteady(true);
-                        autoTimer.current = setTimeout(capture, 2200);
-                    }, 1200);
+                    setIsSteady(true);
+                    timerRef.current = setTimeout(capture, 2600);
                 })
-                .catch(() => { alert("Error cámara"); onCancel(); });
-
+                .catch(() => { alert("Error acceso cámara"); onCancel(); });
                 return () => {
                     if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-                    if (autoTimer.current) clearTimeout(autoTimer.current);
+                    if (timerRef.current) clearTimeout(timerRef.current);
                 };
             }, []);
 
-            const extractNameFromText = (text) => {
-                const lines = text.split('\n').map(l => l.trim().toUpperCase()).filter(l => l.length > 2);
-                let name = "";
-                const nameIdx = lines.findIndex(l => l.includes('NOMBRE') || l.includes('NOMB'));
-                if (nameIdx !== -1 && lines[nameIdx + 1]) {
-                    const nameParts = lines.slice(nameIdx + 1, nameIdx + 4);
-                    name = nameParts.join(' ');
-                } else {
-                    const systemWords = ['INSTITUTO', 'NACIONAL', 'ELECTORAL', 'MEXICO', 'CREDENCIAL'];
-                    const cleanLines = lines.filter(l => !systemWords.some(w => l.includes(w)));
-                    name = cleanLines[0] || "No detectado";
-                }
-                return name;
-            };
-
             const capture = async () => {
-                if (!videoRef.current || !guideRef.current || processing) return;
+                if (!videoRef.current || processing) return;
                 const v = videoRef.current; const g = guideRef.current; const c = canvasRef.current; const ctx = c.getContext('2d');
-                playSuccessBeep();
+                playBeep();
                 setIsFlashing(true); setProcessing(true);
                 setTimeout(() => setIsFlashing(false), 300);
 
@@ -264,23 +232,26 @@
                 const sy = (rG.top - rV.top) * scale;
                 const sw = rG.width * scale;
                 const sh = rG.height * scale;
-                
+
                 c.width = 1600; c.height = 1012;
                 ctx.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
-                const fullImageData = c.toDataURL('image/jpeg', 0.9);
+                const fullImg = c.toDataURL('image/jpeg', 0.95);
 
                 const ocrCanvas = document.createElement('canvas');
-                ocrCanvas.width = 800; ocrCanvas.height = 800;
+                ocrCanvas.width = 1000; ocrCanvas.height = 1000;
                 const ocrCtx = ocrCanvas.getContext('2d');
-                ocrCtx.filter = 'grayscale(100%) contrast(200%) brightness(120%)';
-                ocrCtx.drawImage(v, sx, sy, sw * 0.6, sh, 0, 0, 800, 800);
-                
+                ocrCtx.filter = 'grayscale(100%) contrast(210%) brightness(110%)';
+                // Solo capturamos la zona izquierda bajo "Nombre"
+                ocrCtx.drawImage(v, sx, sy, sw * 0.6, sh, 0, 0, 1000, 1000);
+
                 try {
                     const result = await Tesseract.recognize(ocrCanvas, 'spa');
-                    const extractedName = extractNameFromText(result.data.text);
-                    onCapture(fullImageData, extractedName);
+                    const lines = result.data.text.split('\n').map(l => l.trim().toUpperCase()).filter(l => l.length > 2);
+                    const nameIdx = lines.findIndex(l => l.includes('NOMBRE') || l.includes('NOMB'));
+                    const name = nameIdx !== -1 ? lines.slice(nameIdx+1, nameIdx+4).join(' ') : "No detectado";
+                    onCapture(fullImg, name);
                 } catch (e) {
-                    onCapture(fullImageData, "Error de lectura");
+                    onCapture(fullImg, "Error en lectura");
                 }
             };
 
@@ -289,29 +260,21 @@
                     <div className={`camera-flash ${isFlashing ? 'active' : ''}`} />
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                     <div className="scanner-container">
-                        <div ref={guideRef} className={`scanner-guide ${isSteady ? 'detecting' : ''}`}>
+                        <div ref={guideRef} className={`scanner-guide`}>
                             <div className="scanner-corner c-tl"></div><div className="scanner-corner c-tr"></div>
                             <div className="scanner-corner c-bl"></div><div className="scanner-corner c-br"></div>
-                            {isSteady && (
-                                <div className="auto-capture-ring">
-                                    <svg width="140" height="140" style={{transform: 'rotate(-90deg)'}}>
-                                        <circle className="ring-circle" cx="70" cy="70" r="60" />
-                                    </svg>
-                                </div>
-                            )}
+                            {isSteady && <div className="auto-capture-ring"><svg width="140" height="140" style={{transform: 'rotate(-90deg)'}}><circle className="ring-circle" cx="70" cy="70" r="60" /></svg></div>}
                         </div>
                     </div>
                     <div className="absolute top-12 w-full text-center px-4">
-                        <div className="bg-black/70 py-4 px-8 rounded-3xl inline-block border border-white/10 shadow-2xl font-black">
-                            <p className="text-white text-xs font-black uppercase tracking-widest">
-                                {processing ? "EXTRAYENDO NOMBRE CON IA..." : (isSteady ? "CAPTURA AUTOMÁTICA..." : "ESCANEO ACTIVO: ENFOQUE EL INE")}
-                            </p>
+                        <div className="bg-black/70 py-4 px-8 rounded-3xl inline-block border border-white/10 shadow-2xl font-black text-white">
+                            {processing ? "EXTRAYENDO NOMBRE CON IA..." : "ESCANEO ACTIVO: ENFOQUE EL INE"}
                         </div>
                     </div>
-                    <div className="absolute bottom-12 flex justify-center items-center z-20 w-full px-6">
-                        <button onClick={onCancel} className="p-5 bg-white/10 text-white rounded-full border border-white/20 active:scale-75"><Icon name="x" className="w-8 h-8 font-black" /></button>
-                        {processing && <div className="ml-8"><Icon name="loader" className="w-10 h-10 text-blue-500 animate-spin" /></div>}
+                    <div className="absolute bottom-12 flex justify-center items-center z-20 w-full">
+                        <button onClick={onCancel} className="p-4 bg-white/20 text-white rounded-2xl border border-white/30 font-black uppercase text-xs">Cancelar</button>
                     </div>
+                    <canvas ref={canvasRef} className="hidden" />
                 </div>
             );
         }
@@ -319,135 +282,85 @@
         function AdminView({ habitantes, agentes, logs, admins, role, activeUser, onResetSuccess }) {
             const [tab, setTab] = useState('residentes');
             const [view, setView] = useState('list');
-            const [isActionLoading, setIsActionLoading] = useState(false);
             const [form, setForm] = useState({ nombre: '', casa: '', password: '' });
             const [passRecovery, setPassRecovery] = useState(null); 
             const [selectedPhoto, setSelectedPhoto] = useState(null);
             const [passError, setPassError] = useState("");
 
             const isMaestro = activeUser?.esMaestro || role === 'superuser';
-
-            const filteredAdmins = admins.filter(a => {
-                if (role === 'superuser') return a.usuario !== 'superuser'; 
-                if (activeUser?.esMaestro) return !a.esMaestro && a.usuario !== 'superuser'; 
-                return false;
-            });
-
-            const displayLogs = (() => {
-                if (role === 'superuser') return logs;
-                return logs.filter(l => l.autorRole !== 'SUPERUSER');
-            })();
+            const filteredAdmins = admins.filter(a => (role === 'superuser' ? a.usuario !== 'superuser' : (activeUser?.esMaestro ? !a.esMaestro && a.usuario !== 'superuser' : false)));
+            const displayLogs = role === 'superuser' ? logs : (activeUser?.esMaestro ? logs.filter(l => l.autorRole !== 'SUPERUSER') : logs.filter(l => l.tipo === 'Visita' || l.tipo === 'Acceso Denegado'));
 
             useEffect(() => { setView('list'); setPassError(""); }, [tab]);
 
-            const logAction = async (tipo, detalles) => {
-                await getColRef('bitacora').add({ 
-                    tipo, detalles, 
-                    autor: activeUser.nombre, 
-                    autorRole: role === 'superuser' ? 'SUPERUSER' : (activeUser.esMaestro ? 'MAESTRO' : 'AUXILIAR'),
-                    timestamp: new Date().toISOString() 
-                });
-            };
-
-            const resetSystem = async () => {
-                if (!confirm("¡ADVERTENCIA! Se borrará todo. ¿Desea continuar?")) return;
-                setIsActionLoading(true);
-                const collections = ['habitantes', 'agentes', 'bitacora', 'admins'];
-                for (const col of collections) {
-                    const snap = await getColRef(col).get();
-                    const batch = db.batch();
-                    snap.forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
-                }
-                onResetSuccess();
-            };
-
-            const deleteEntry = async (colName, id, nombre) => {
-                if(!confirm(`¿Eliminar registro de ${nombre}?`)) return;
-                try { 
-                    await getColRef(colName).doc(id).delete(); 
-                    await logAction('Sistema', `Eliminó registro: ${nombre}`); 
-                } catch (e) { alert("Error."); }
+            const deleteEntry = async (col, id) => {
+                if(!confirm(`¿Eliminar este registro?`)) return;
+                await getColRef(col).doc(id).delete();
             };
 
             const handleSave = async (e) => {
                 e.preventDefault(); 
                 if (form.password.length < 5) { setPassError("Mínimo 5 caracteres."); return; }
-                setIsActionLoading(true);
                 const col = tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins');
-                try {
-                    const finalName = toTitleCase(form.nombre);
-                    const data = { nombre: finalName, password: form.password, mustChangeCode: true, esMaestro: false };
-                    if (tab === 'residentes') { data.casa = form.casa; CATEGORIAS_ACCESO.forEach(cat => data[`permiso_${cat.id}`] = true); }
-                    await getColRef(col).add(data);
-                    await logAction('Sistema', `Registro: ${finalName}`);
-                    setForm({ nombre: '', casa: '', password: '' });
-                    setView('list');
-                } catch (err) { alert("Error."); }
-                setIsActionLoading(false);
+                const data = { nombre: toTitleCase(form.nombre), password: form.password, mustChangeCode: true, esMaestro: false };
+                if (tab === 'residentes') { data.casa = form.casa; CATEGORIAS_ACCESO.forEach(c => data[`permiso_${c.id}`] = true); }
+                await getColRef(col).add(data);
+                setView('list'); setForm({ nombre: '', casa: '', password: '' });
             };
 
             return (
-                <div className="space-y-4 animate-fade-in pb-24 h-full font-black">
+                <div className="space-y-4 animate-fade-in pb-24 h-full">
                     <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-fit overflow-x-auto max-w-full no-print">
                         {['residentes', 'guardias', 'bitacora', (isMaestro && 'administradores')].filter(Boolean).map(t => (
                             <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
                         ))}
                     </div>
-
                     <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-[500px]">
-                        <div className="flex justify-between items-center mb-8 font-black">
-                            <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight leading-none font-black">{tab}</h2>
-                            <div className="flex gap-3">
-                                {role === 'superuser' && tab === 'bitacora' && <button onClick={resetSystem} className="bg-rose-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">REINICIAR</button>}
-                                {view === 'list' && tab !== 'bitacora' && <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg font-black"><Icon name="plus-circle" /> Nuevo</button>}
-                            </div>
-                        </div>
-
+                        <h2 className="text-xl font-black uppercase text-slate-800 mb-6">{tab}</h2>
                         {view === 'list' ? (
-                            <div className="overflow-x-auto rounded-3xl border border-slate-100 font-medium">
+                            <div className="overflow-x-auto rounded-3xl border border-slate-100">
                                 <table className="w-full text-left text-sm font-black">
                                     <thead className="bg-slate-50 font-black uppercase text-[10px] text-slate-400 border-b">
                                         <tr><th className="px-6 py-4">Sujeto</th><th className="px-6">Info</th><th className="text-right pr-10">Acción</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {(tab==='bitacora' ? displayLogs : tab==='residentes' ? habitantes : tab==='guardias' ? agentes : filteredAdmins).sort((a,b)=> (b.timestamp || "").localeCompare(a.timestamp || "")).map(x => (
-                                            <tr key={x.id} className={`hover:bg-slate-50/50 transition-colors font-black ${x.tipo === 'Acceso Denegado' ? 'bg-rose-50/30' : ''}`}>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2 font-black">
+                                            <tr key={x.id} className={`border-b ${x.tipo === 'Acceso Denegado' ? 'bg-rose-50/30' : ''}`}>
+                                                <td className="px-6 py-4 font-black">
+                                                    <div className="flex items-center gap-2">
                                                         {x.tipo === 'Acceso Denegado' && <span className="text-rose-600"><Icon name="x-circle" className="w-4 h-4" /></span>}
                                                         {x.visitante || x.nombre || x.habitanteNombre}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-500 uppercase text-xs font-black">{x.casa || (x.esMaestro ? 'MAESTRO' : x.tipo || 'AUXILIAR')}</td>
-                                                <td className="px-6 py-4 text-right pr-10 flex justify-end gap-1 font-black">
+                                                <td className="px-6 py-4 text-slate-500 uppercase text-xs">{x.casa || (x.esMaestro ? 'MAESTRO' : x.tipo || 'AUXILIAR')}</td>
+                                                <td className="px-6 py-4 text-right pr-10 flex justify-end gap-1">
                                                     {x.fotoINE && <button onClick={() => setSelectedPhoto(x.fotoINE)} className="p-2 text-blue-600"><Icon name="image" className="w-4 h-4"/></button>}
-                                                    {tab !== 'bitacora' && <button onClick={() => deleteEntry(tab, x.id, x.nombre)} className="p-2 text-rose-500"><Icon name="trash" className="w-4 h-4"/></button>}
+                                                    {tab !== 'bitacora' && <button onClick={() => deleteEntry(tab, x.id)} className="p-2 text-rose-500"><Icon name="trash" className="w-4 h-4"/></button>}
                                                 </td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
+                                {tab !== 'bitacora' && <button onClick={() => setView('add')} className="w-full mt-4 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs">Nuevo Registro</button>}
                             </div>
                         ) : (
-                            <form onSubmit={handleSave} className="max-w-md mx-auto space-y-4 font-black">
-                                <input className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
-                                {tab === 'residentes' && <input className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />}
-                                <PasswordInput name="password" placeholder="Contraseña inicial (min 5)" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                                {passError && <p className="text-rose-600 text-xs font-bold mt-1 ml-2 font-black">{passError}</p>}
-                                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-xl mt-4 font-black">Guardar Registro</button>
-                                <button type="button" onClick={() => setView('list')} className="w-full text-center text-slate-400 text-xs uppercase font-black">Cancelar</button>
+                            <form onSubmit={handleSave} className="max-w-md mx-auto space-y-4">
+                                <input className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+                                {tab === 'residentes' && <input className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />}
+                                <PasswordInput placeholder="Contraseña (min 5)" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase">Guardar</button>
+                                <button type="button" onClick={() => setView('list')} className="w-full text-center text-slate-400 text-xs uppercase mt-2">Cancelar</button>
                             </form>
                         )}
                     </div>
                     {selectedPhoto && (
                         <div className="fixed inset-0 bg-slate-900/95 z-[300] flex flex-col items-center justify-center p-6 backdrop-blur-md animate-fade-in no-print font-black">
                             <div className="max-w-3xl w-full flex flex-col gap-4">
-                                <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print font-black">
-                                    <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 text-white rounded-2xl text-[10px] uppercase font-black flex items-center gap-2"><Icon name="arrow-left" /> Regresar</button>
-                                    <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] uppercase font-black flex items-center gap-2 shadow-xl"><Icon name="printer" /> Imprimir</button>
+                                <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl">
+                                    <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 text-white rounded-2xl text-[10px] uppercase font-black"><Icon name="arrow-left" /> Cerrar</button>
+                                    <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] uppercase font-black"><Icon name="printer" /> Imprimir</button>
                                 </div>
-                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl overflow-hidden font-black"><img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block" alt="ID" /></div>
+                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl overflow-hidden"><img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block" alt="INE" /></div>
                             </div>
                         </div>
                     )}
@@ -456,40 +369,37 @@
         }
 
         function HabitanteModule({ habitante }) {
-            const currentClave = getQRCodeURL(habitante.id);
             const togglePermission = async (catId) => {
                 const field = `permiso_${catId}`;
                 await getColRef('habitantes').doc(habitante.id).update({ [field]: !habitante[field] });
             };
             return (
-                <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in font-black font-black">
+                <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in font-black">
                     <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden font-black">
                         <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 font-black"></div>
-                        <h2 className="text-2xl font-black uppercase mb-6 mt-2 tracking-tighter text-slate-900 leading-none">Pase Residencial</h2>
-                        <img src={getQRCodeURL(habitante.id)} className="w-48 h-48 mx-auto mb-6 shadow-sm rounded-2xl border-8 border-slate-50" alt="QR" />
+                        <h2 className="text-2xl font-black uppercase mb-6 mt-2 tracking-tighter text-slate-900">Pase Residencial</h2>
+                        <img src={getQRCodeURL(habitante.id)} className="w-48 h-48 mx-auto mb-6 shadow-sm rounded-2xl border-8 border-slate-50 font-black" alt="QR" />
                         <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 w-full shadow-inner font-black">
-                            <span className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest leading-none font-black">ID de Acceso</span>
-                            <p className="font-black text-blue-600 text-xl tracking-[0.2em] uppercase leading-none font-black">{habitante.id.slice(0,8).toUpperCase()}</p>
+                            <span className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest leading-none">ID Acceso</span>
+                            <p className="font-black text-blue-600 text-xl tracking-[0.2em] uppercase leading-none">{habitante.id.slice(0,8).toUpperCase()}</p>
                         </div>
                     </div>
-                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 space-y-4">
-                        <h3 className="text-sm font-black uppercase text-slate-400 tracking-widest ml-4 mb-2 font-black">Configurar Accesos</h3>
-                        <div className="grid grid-cols-1 gap-3 font-black">
-                            {CATEGORIAS_ACCESO.map(cat => (
-                                <button key={cat.id} onClick={() => togglePermission(cat.id)} className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all active:scale-95 font-black ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700 opacity-60'}`}>
-                                    <div className="flex items-center gap-4 font-black">
-                                        <div className={`p-2 rounded-xl ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><Icon name={cat.icon} className="w-5 h-5 font-black" /></div>
-                                        <div className="flex flex-col items-start leading-none font-black">
-                                            <span className="text-xs font-black uppercase tracking-tight">{cat.label}</span>
-                                            <span className="text-[9px] font-bold opacity-60 mt-1 uppercase font-black font-black">{habitante[`permiso_${cat.id}`] !== false ? 'Permitido' : 'Bloqueado'}</span>
-                                        </div>
+                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 space-y-4 font-black">
+                        <h3 className="text-sm font-black uppercase text-slate-400 tracking-widest ml-4 mb-2">Mis Permisos</h3>
+                        {CATEGORIAS_ACCESO.map(cat => (
+                            <button key={cat.id} onClick={() => togglePermission(cat.id)} className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all active:scale-95 ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-black' : 'bg-rose-50 border-rose-200 text-rose-700 opacity-60'}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-2 rounded-xl ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><Icon name={cat.icon} className="w-5 h-5" /></div>
+                                    <div className="flex flex-col items-start leading-none font-black font-black">
+                                        <span className="text-xs font-black uppercase tracking-tight">{cat.label}</span>
+                                        <span className="text-[9px] font-bold opacity-60 mt-1 uppercase font-black">{habitante[`permiso_${cat.id}`] !== false ? 'Permitido' : 'Bloqueado'}</span>
                                     </div>
-                                    <div className={`w-10 h-6 rounded-full relative transition-colors ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-500' : 'bg-rose-500'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${habitante[`permiso_${cat.id}`] !== false ? 'right-1' : 'left-1'}`}></div></div>
+                                </div>
+                                <div className={`w-10 h-6 rounded-full relative transition-colors ${habitante[`permiso_${cat.id}`] !== false ? 'bg-emerald-500' : 'bg-rose-500'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${habitante[`permiso_${cat.id}`] !== false ? 'right-1' : 'left-1'}`}></div></div>
                                 </button>
                             ))}
                         </div>
                     </div>
-                </div>
             );
         }
 
@@ -510,7 +420,7 @@
                         subtipo: CATEGORIAS_ACCESO.find(c => c.id === catId)?.label.toUpperCase(), 
                         visitante: vName.toUpperCase() || 'DESCONOCIDO', 
                         habitanteNombre: sel.nombre, casa: sel.casa, timestamp: new Date().toISOString(), 
-                        autor: agente.nombre, autorRole: 'GUARDIA', fotoINE: photo || ''
+                        autor: agente.nombre, autorRole: 'GUARDIA', font: VERSION, fotoINE: photo || ''
                     });
                     setSel(null); setStep(1); setVName(""); setPhoto(null); setSearch(""); setIsManual(false);
                 } catch(e) { alert("Error al registrar."); }
@@ -520,34 +430,34 @@
 
             return (
                 <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20 font-black">
-                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group font-black font-black">
-                        <Icon name="search" className="text-slate-300 w-10 h-10 transition-colors group-focus-within:text-blue-500 font-black font-black" />
-                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar habitante..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group">
+                        <Icon name="search" className="text-slate-300 w-10 h-10 transition-colors group-focus-within:text-blue-500" />
+                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Identificar casa/lote..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-black font-black font-black">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filtered.map(h => (
-                            <div key={h.id} className="bg-white rounded-[2.5rem] shadow-xl border-t-[12px] border-slate-800 flex flex-col animate-fade-in overflow-hidden font-black">
+                            <div key={h.id} className="bg-white rounded-[2.5rem] shadow-xl border-t-[12px] border-slate-800 flex flex-col animate-fade-in overflow-hidden">
                                 <div className="p-6 space-y-4">
-                                    <h4 className="font-black text-slate-900 uppercase text-lg truncate font-black font-black">{h.nombre}</h4>
+                                    <h4 className="font-black text-slate-900 uppercase text-lg truncate">{h.nombre}</h4>
                                     <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex justify-between items-center font-black">
-                                        <span className="text-[10px] text-slate-400 font-black uppercase font-black font-black">CASA / LOTE</span>
-                                        <span className="text-sm font-black text-blue-600 font-black font-black font-black font-black font-black">{h.casa}</span>
+                                        <span className="text-[10px] text-slate-400 font-black uppercase">CASA / LOTE</span>
+                                        <span className="text-sm font-black text-blue-600 font-black">{h.casa}</span>
                                     </div>
-                                    <button onClick={() => { setSel(h); setStep(2); }} className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all font-black font-black font-black">Registrar Entrada</button>
+                                    <button onClick={() => { prepareAudio(); setSel(h); setStep(2); }} className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all">Registrar Entrada</button>
                                 </div>
                             </div>
                         ))}
                     </div>
                     {sel && (
                         <div className="fixed inset-0 bg-slate-950/90 z-[200] overflow-y-auto">
-                            <div className="keyboard-aware-modal w-full max-w-lg mx-auto font-black font-black font-black font-black font-black">
-                                <div className="bg-white p-6 sm:p-8 rounded-[3rem] w-full space-y-6 animate-fade-in relative text-center shadow-2xl border border-slate-100 font-black">
-                                    <h3 className="text-xl font-black uppercase text-slate-900 font-black">Acceso a Domicilio</h3>
-                                    <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 leading-none font-black"><p className="text-xl font-black text-slate-800 uppercase mb-1 font-black">{sel.nombre}</p><p className="text-blue-600 font-black text-[11px] uppercase tracking-widest font-black font-black">LOTE {sel.casa}</p></div>
+                            <div className="keyboard-aware-modal w-full max-w-lg mx-auto font-black font-black">
+                                <div className="bg-white p-6 sm:p-8 rounded-[3rem] w-full space-y-6 animate-fade-in relative text-center shadow-2xl border border-slate-100">
+                                    <h3 className="text-xl font-black uppercase text-slate-900 font-black font-black">Acceso a Domicilio</h3>
+                                    <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 leading-none font-black font-black font-black font-black font-black"><p className="text-xl font-black text-slate-800 uppercase mb-1 font-black font-black">{sel.nombre}</p><p className="text-blue-600 font-black text-[11px] uppercase tracking-widest font-black font-black font-black font-black">LOTE {sel.casa}</p></div>
                                     
                                     {step === 2 && (
-                                        <div className="space-y-6 font-black font-black font-black">
-                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest font-black font-black font-black">Seleccione Categoría</p>
+                                        <div className="space-y-6 font-black font-black font-black font-black font-black font-black">
+                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest font-black">Seleccione Categoría</p>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                 {CATEGORIAS_ACCESO.map(cat => {
                                                     const allowed = sel[`permiso_${cat.id}`] !== false;
@@ -555,13 +465,13 @@
                                                         <button key={cat.id} onClick={() => { setCatId(cat.id); setScanning(true); }}
                                                             className={`flex flex-col items-center justify-center gap-1 p-4 rounded-3xl border-2 transition-all active:scale-90 font-black bg-white border-slate-100 text-slate-900 relative font-black font-black`}
                                                         >
-                                                            <div className={`p-4 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black relative flex items-center justify-center font-black font-black`}>
-                                                                <Icon name={cat.icon} className="w-8 h-8 font-black font-black" />
-                                                                {!allowed && <div className="diagonal-strike font-black font-black font-black">BLOQUEADO</div>}
+                                                            <div className={`p-4 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black relative flex items-center justify-center font-black`}>
+                                                                <Icon name={cat.icon} className="w-8 h-8 font-black font-black font-black font-black" />
+                                                                {!allowed && <div className="diagonal-strike font-black font-black font-black font-black font-black">BLOQUEADO</div>}
                                                             </div>
                                                             <div className="text-center font-black mt-2">
-                                                                <span className="text-[8px] uppercase leading-none block font-black mb-1 font-black">{cat.label}</span>
-                                                                {allowed && <span className="text-[7px] font-black uppercase text-emerald-500 font-black">PERMITIDO</span>}
+                                                                <span className="text-[8px] uppercase leading-none block font-black mb-1 font-black font-black">{cat.label}</span>
+                                                                {allowed && <span className="text-[7px] font-black uppercase text-emerald-500 font-black font-black">PERMITIDO</span>}
                                                             </div>
                                                         </button>
                                                     );
@@ -570,28 +480,28 @@
                                         </div>
                                     )}
                                     {step === 3 && (
-                                        <div className="space-y-6 text-left font-black font-black font-black">
-                                            <div className={`${sel[`permiso_${catId}`] !== false ? 'bg-blue-600' : 'bg-rose-600'} text-white p-5 rounded-[2.5rem] flex items-center gap-5 font-black font-black font-black`}>
-                                                <div className="bg-white/20 p-3 rounded-2xl font-black font-black font-black font-black"><Icon name={CATEGORIAS_ACCESO.find(c=>c.id===catId)?.icon} className="w-7 h-7 font-black font-black font-black" /></div>
-                                                <div className="leading-none font-black font-black">
-                                                    <span className="text-[9px] font-black uppercase opacity-70">Identidad Confirmada</span>
-                                                    <p className="font-black text-xl uppercase mt-1 font-black font-black font-black font-black">{CATEGORIAS_ACCESO.find(c=>c.id===catId)?.label}</p>
+                                        <div className="space-y-6 text-left font-black font-black font-black font-black">
+                                            <div className={`${sel[`permiso_${catId}`] !== false ? 'bg-blue-600 font-black font-black' : 'bg-rose-600 font-black'} text-white p-5 rounded-[2.5rem] flex items-center gap-5 font-black font-black`}>
+                                                <div className="bg-white/20 p-3 rounded-2xl font-black font-black font-black font-black font-black font-black font-black"><Icon name={CATEGORIAS_ACCESO.find(c=>c.id===catId)?.icon} className="w-7 h-7 font-black font-black font-black font-black" /></div>
+                                                <div className="leading-none font-black font-black font-black font-black font-black font-black font-black">
+                                                    <span className="text-[9px] font-black uppercase opacity-70 font-black">Identidad Confirmada</span>
+                                                    <p className="font-black text-xl uppercase mt-1 font-black">{CATEGORIAS_ACCESO.find(c=>c.id===catId)?.label}</p>
                                                 </div>
                                             </div>
-                                            <div className="space-y-4 font-black font-black">
+                                            <div className="space-y-4 font-black font-black font-black font-black">
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4 font-black">Nombre del Visitante</label>
-                                                    <input className={`w-full p-5 rounded-[2rem] border-2 font-black outline-none uppercase text-center ${isManual ? 'bg-white border-blue-500 font-black' : 'bg-slate-50 border-slate-100 font-black font-black'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Nombre del Visitante</label>
+                                                    <input className={`w-full p-5 rounded-[2rem] border-2 font-black outline-none uppercase text-center ${isManual ? 'bg-white border-blue-500' : 'bg-slate-50 border-slate-100 font-black'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
                                                 </div>
-                                                {photo && <img src={photo} className="w-full h-40 object-cover rounded-3xl border shadow-inner font-black" alt="INE" />}
-                                                <div className="flex justify-between px-2 font-black font-black font-black">
-                                                    <button onClick={() => setScanning(true)} className="text-blue-600 text-[10px] font-black uppercase underline font-black font-black font-black">Reintentar Escaneo</button>
-                                                    <button onClick={() => setIsManual(true)} className="text-slate-400 text-[10px] font-black uppercase underline font-black font-black">Editar Manual</button>
+                                                {photo && <img src={photo} className="w-full h-40 object-cover rounded-3xl border shadow-inner font-black font-black font-black font-black font-black font-black" alt="INE" />}
+                                                <div className="flex justify-between px-2 font-black font-black font-black font-black font-black">
+                                                    <button onClick={() => setScanning(true)} className="text-blue-600 text-[10px] font-black uppercase underline font-black font-black font-black font-black font-black">Reintentar Escaneo</button>
+                                                    <button onClick={() => setIsManual(true)} className="text-slate-400 text-[10px] font-black uppercase underline font-black font-black font-black font-black font-black">Editar Manual</button>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
-                                    <div className="flex gap-4 font-black font-black font-black font-black"><button onClick={() => { if(step > 1) setStep(step - 1); else { setSel(null); setStep(1); setSearch(""); } }} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-[10px] font-black">Cerrar</button>{step === 3 && (sel[`permiso_${catId}`] !== false ? <button disabled={!vName.trim()} onClick={() => handleReg(true)} className="flex-1 py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black font-black">Autorizar</button> : <button onClick={() => handleReg(false)} className="flex-1 py-5 bg-rose-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black font-black">Negar Acceso</button>)}</div>
+                                    <div className="flex gap-4 font-black font-black font-black font-black"><button onClick={() => { if(step > 1) setStep(step - 1); else { setSel(null); setStep(1); setSearch(""); } }} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-[10px] font-black">Cerrar</button>{step === 3 && (sel[`permiso_${catId}`] !== false ? <button disabled={!vName.trim()} onClick={() => handleReg(true)} className="flex-1 py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black font-black font-black font-black">Autorizar</button> : <button onClick={() => handleReg(false)} className="flex-1 py-5 bg-rose-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black">Negar Acceso</button>)}</div>
                                 </div>
                             </div>
                         </div>
@@ -658,54 +568,53 @@
                     }
                 }
                 if (foundUser) { setActiveUser(foundUser); setRole(foundRole); setAuthStep('dashboard'); await getColRef('bitacora').add({ tipo: 'Acceso Sistema', subtipo: foundRole.toUpperCase(), habitanteNombre: foundUser.nombre, timestamp: new Date().toISOString(), autorRole: foundRole === 'superuser' ? 'SUPERUSER' : (foundUser.esMaestro ? 'MAESTRO' : 'AUXILIAR') }); }
-                else { alert("Acceso denegado."); }
+                else { playBeep(200, 0.5); }
             };
 
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white animate-splash-out p-6 font-black font-black">
-                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20 shadow-blue-600/30 font-black"><Icon name="shield" className="w-16 h-16 sm:w-24 sm:h-24 text-white shadow-2xl font-black font-black" /></div>
-                    <h1 className="responsive-title font-black text-center tracking-tighter px-2 font-black">{TITULO_SISTEMA}</h1>
-                    <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40 font-black font-black font-black font-black font-black font-black">{VERSION}</p>
+                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20 shadow-blue-600/30 font-black"><Icon name="shield" className="w-16 h-16 sm:w-24 sm:h-24 text-white shadow-2xl font-black" /></div>
+                    <h1 className="responsive-title font-black text-center tracking-tighter px-2 font-black font-black font-black font-black">{TITULO_SISTEMA}</h1>
+                    <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40 font-black font-black font-black">{VERSION}</p>
                 </div>
             );
             if (loading) return null;
             if (authStep === 'login') return (
-                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black font-black font-black font-black font-black">
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black font-black font-black">
                     <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm border-2 border-slate-100 text-center font-black">
-                        <div className="flex justify-center mb-6 font-black font-black font-black font-black font-black font-black font-black font-black font-black"><div className="p-4 rounded-2xl bg-slate-900 text-white font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><Icon name="lock" className="w-8 h-8 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black" /></div></div>
-                        <h2 className="text-xl sm:text-2xl font-black leading-tight tracking-tight px-2">{TITULO_SISTEMA}</h2>
+                        <div className="flex justify-center mb-6 font-black font-black font-black font-black font-black font-black font-black"><div className="p-4 rounded-2xl bg-slate-900 text-white font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><Icon name="lock" className="w-8 h-8 font-black font-black font-black font-black font-black font-black font-black font-black font-black" /></div></div>
+                        <h2 className="text-xl sm:text-2xl font-black leading-tight tracking-tight px-2 font-black font-black font-black">{TITULO_SISTEMA}</h2>
                         <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left mt-6 font-black">
                             <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-xs outline-none font-black font-black font-black" placeholder="Nombre completo" required />
                             <PasswordInput placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
                             <button className="w-full py-4 rounded-2xl font-black uppercase shadow-xl bg-slate-900 hover:bg-black text-white text-[11px] tracking-widest font-black font-black font-black">Entrar al Sistema</button>
-                            <button type="button" onClick={forceReset} className="w-full mt-4 py-3 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[9px] tracking-[0.2em] flex items-center justify-center gap-2 font-black font-black"><Icon name="log-out" className="w-3 h-3 font-black" /> Salir</button>
                         </form>
                     </div>
                 </div>
             );
 
             return (
-                <div className="h-full flex flex-col overflow-hidden bg-slate-50 font-black font-black font-black font-black font-black">
-                    <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 font-black font-black font-black font-black font-black">
+                <div className="h-full flex flex-col overflow-hidden bg-slate-50 font-black font-black font-black">
+                    <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 font-black font-black font-black">
                         <div className="flex items-center gap-3">
                             <Icon name="shield" className="w-5 h-5 text-blue-500 font-black font-black font-black font-black font-black" />
-                            <div className="flex flex-col leading-none font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
-                                <span className="text-[10px] sm:text-xs tracking-tighter leading-none truncate max-w-[120px] sm:max-w-none font-black">{TITULO_SISTEMA}</span>
-                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1">CONTROL - {VERSION}</span>
+                            <div className="flex flex-col leading-none font-black font-black font-black">
+                                <span className="text-[10px] sm:text-xs tracking-tighter leading-none truncate max-w-[120px] sm:max-w-none font-black font-black font-black">{TITULO_SISTEMA}</span>
+                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1 font-black font-black">CONTROL - {VERSION}</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 font-sans font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
-                            <div className="flex flex-col items-end text-right font-black">
-                                <span className="text-[10px] font-black uppercase text-white leading-none mb-1 truncate max-w-[150px] font-black">{activeUser?.nombre}</span>
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                        <div className="flex items-center gap-4 font-sans font-black font-black font-black font-black">
+                            <div className="flex flex-col items-end text-right font-black font-black font-black font-black font-black font-black font-black font-black">
+                                <span className="text-[10px] font-black uppercase text-white leading-none mb-1 truncate max-w-[150px] font-black font-black font-black">{activeUser?.nombre}</span>
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none font-black font-black font-black font-black font-black font-black font-black">
                                     {role === 'admin' ? (activeUser?.esMaestro ? 'ADMIN MAESTRO' : 'ADMIN AUXILIAR') : role === 'guardia' ? 'GUARDIA' : role === 'superuser' ? 'SÚPER USUARIO' : 'RESIDENTE'}
                                 </span>
                             </div>
-                            <button onClick={forceReset} className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-white rounded-lg font-bold text-[9px] uppercase transition-all shadow-lg border border-slate-700 font-black">Salir</button>
+                            <button onClick={forceReset} className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-white rounded-lg font-bold text-[9px] uppercase transition-all shadow-lg border border-slate-700 font-black font-black font-black">Salir</button>
                         </div>
                     </header>
-                    <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50 font-black">
-                        <div className="max-w-7xl mx-auto w-full h-full no-print font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50 font-black font-black font-black font-black font-black font-black font-black">
+                        <div className="max-w-7xl mx-auto w-full h-full no-print font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
                             {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} activeUser={activeUser} onResetSuccess={forceReset} />}
                             {role === 'habitante' && <HabitanteModule habitante={habitantes.find(h => h.id === activeUser?.id) || activeUser} />}
                             {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
