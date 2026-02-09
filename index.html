@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Viyautepec 2a Sección - Ver. 6.8</title>
+    <title>Viyautepec 2a Sección - Ver. 6.9</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y Babel Standalone -->
@@ -20,10 +20,11 @@
             margin: 0; padding: 0; height: 100vh; width: 100vw; 
             font-family: 'Inter', sans-serif; background-color: #f8fafc; 
             overflow-x: hidden;
-            -webkit-tap-highlight-color: transparent; /* Optimización iOS */
+            -webkit-tap-highlight-color: transparent;
         }
         #root { height: 100%; display: flex; flex-direction: column; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
@@ -62,9 +63,7 @@
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 2px solid rgba(255, 255, 255, 0.4);
         }
-        .scanner-corner { 
-            position: absolute; width: 30px; height: 30px; border: 4px solid #3b82f6; 
-        }
+        .scanner-corner { position: absolute; width: 30px; height: 30px; border: 4px solid #3b82f6; }
         .c-tl { top: -4px; left: -4px; border-right: 0; border-bottom: 0; border-radius: 14px 0 0 0; }
         .c-tr { top: -4px; right: -4px; border-left: 0; border-bottom: 0; border-radius: 0 14px 0 0; }
         .c-bl { bottom: -4px; left: -4px; border-right: 0; border-top: 0; border-radius: 0 0 0 14px; }
@@ -79,7 +78,7 @@
             z-index: 30;
             pointer-events: none;
             padding: 2px 6px;
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.2);
             border: 1.5px solid #ef4444;
             color: #ef4444;
             font-size: 8px;
@@ -88,7 +87,7 @@
             text-transform: uppercase;
         }
 
-        /* Prevenir zoom en iOS */
+        /* Input fix for iOS zoom */
         input, select, textarea { font-size: 16px !important; }
 
         @media print {
@@ -121,7 +120,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 6.8";
+        const VERSION = "Ver. 6.9";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
 
         const CATEGORIAS_ACCESO = [
@@ -216,7 +215,6 @@
             );
         }
 
-        // --- Componente de Escaneo (Optimizado iOS) ---
         function IDScannerWidget({ onCapture, onCancel }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -232,10 +230,7 @@
                     if(videoRef.current) videoRef.current.srcObject = s;
                     setTimeout(() => { setIsAutoDetecting(true); autoTimer.current = setTimeout(capture, 2800); }, 1200);
                 })
-                .catch(err => {
-                    alert("Error acceso cámara: " + err.message);
-                    onCancel();
-                });
+                .catch(err => { alert("Error cámara: " + err.message); onCancel(); });
                 return () => {
                     if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
                     if (autoTimer.current) clearTimeout(autoTimer.current);
@@ -249,8 +244,12 @@
                 const scale = v.videoWidth / v.clientWidth;
                 const rG = g.getBoundingClientRect();
                 const rV = v.getBoundingClientRect();
+                const sx = (rG.left - rV.left) * scale;
+                const sy = (rG.top - rV.top) * scale;
+                const sw = rG.width * scale;
+                const sh = rG.height * scale;
                 c.width = 1600; c.height = 1012;
-                ctx.drawImage(v, (rG.left - rV.left) * scale, (rG.top - rV.top) * scale, rG.width * scale, rG.height * scale, 0, 0, c.width, c.height);
+                ctx.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
                 onCapture(c.toDataURL('image/jpeg', 0.92));
             };
 
@@ -286,17 +285,18 @@
 
             const isMaestro = activeUser?.esMaestro || role === 'superuser';
 
-            // El Súper Usuario es invisible para el Maestro y para otros Auxiliares
+            // REGLA: Súper Usuario es invisible para el Maestro y para otros Auxiliares
             const filteredAdmins = admins.filter(a => {
-                if (role === 'superuser') return a.usuario !== 'superuser'; // El su solo se oculta a sí mismo
-                if (activeUser?.esMaestro) return !a.esMaestro && a.usuario !== 'superuser'; // Maestro ve solo auxiliares, no al SU
+                if (role === 'superuser') return a.usuario !== 'superuser'; 
+                if (activeUser?.esMaestro) return !a.esMaestro && a.usuario !== 'superuser'; 
                 return false;
             });
 
-            // Filtrado de Bitácora por Jerarquía
+            // REGLA: Filtrado de Bitácora por Jerarquía Estricta
             const displayLogs = (() => {
                 if (role === 'superuser') return logs;
                 if (activeUser?.esMaestro) return logs.filter(l => l.autorRole !== 'SUPERUSER');
+                // Auxiliar solo ve visitas y denegaciones
                 return logs.filter(l => l.tipo === 'Visita' || l.tipo === 'Acceso Denegado');
             })();
 
@@ -313,20 +313,23 @@
             };
 
             const resetSystem = async () => {
-                if (!confirm("¡ATENCIÓN! Se borrará toda la información del sistema. ¿Desea continuar?")) return;
+                if (!confirm("¡ADVERTENCIA! Esta acción borrará TODOS los datos. ¿Desea continuar?")) return;
                 setIsActionLoading(true);
-                const collections = ['habitantes', 'agentes', 'bitacora', 'admins'];
-                for (const col of collections) {
-                    const snap = await getColRef(col).get();
-                    const batch = db.batch();
-                    snap.forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
-                }
-                onResetSuccess();
+                try {
+                    const collections = ['habitantes', 'agentes', 'bitacora', 'admins'];
+                    for (const col of collections) {
+                        const snap = await getColRef(col).get();
+                        const batch = db.batch();
+                        snap.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                    }
+                    onResetSuccess();
+                } catch (e) { alert("Error al reiniciar."); }
+                setIsActionLoading(false);
             };
 
             const deleteEntry = async (colName, id, nombre) => {
-                if(!confirm(`¿Eliminar registro de ${nombre}?`)) return;
+                if(!confirm(`¿Desea eliminar registro de: ${nombre}?`)) return;
                 try { 
                     await getColRef(colName).doc(id).delete(); 
                     await logAction('Sistema', `Eliminó registro: ${nombre} de ${colName}`); 
@@ -340,8 +343,18 @@
                 setPassError(""); setIsActionLoading(true);
                 try {
                     await getColRef(passRecovery.col).doc(passRecovery.id).update({ password: newPass, mustChangeCode: true });
-                    await logAction('Sistema', `Reset Clave: ${passRecovery.nombre}`);
-                    setPassRecovery(null);
+                    await logAction('Sistema', `Cambió clave de ${passRecovery.nombre}`);
+                    alert("Clave actualizada."); setPassRecovery(null);
+                } catch (e) { alert("Error."); }
+                setIsActionLoading(false);
+            };
+
+            const handleResidentUpdate = async (e) => {
+                e.preventDefault(); const n = toTitleCase(e.target.editName.value); const h = e.target.editHouse.value;
+                setIsActionLoading(true);
+                try {
+                    await getColRef('habitantes').doc(editResident.id).update({ nombre: n, casa: h });
+                    setEditResident(null);
                 } catch (e) { alert("Error."); }
                 setIsActionLoading(false);
             };
@@ -350,17 +363,13 @@
                 e.preventDefault(); 
                 if (form.password.length < 5) { setPassError("Mínimo 5 caracteres."); return; }
                 setPassError(""); setIsActionLoading(true);
-                const col = tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins');
+                const colName = tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins');
                 try {
-                    const data = { 
-                        nombre: toTitleCase(form.nombre), 
-                        password: form.password, 
-                        mustChangeCode: true,
-                        esMaestro: false 
-                    };
-                    if (tab === 'residentes') { data.casa = form.casa; CATEGORIAS_ACCESO.forEach(c => data[`permiso_${c.id}`] = true); }
-                    await getColRef(col).add(data);
-                    await logAction('Sistema', `Creó ${tab}: ${data.nombre}`);
+                    const finalName = toTitleCase(form.nombre);
+                    const data = { nombre: finalName, password: form.password, mustChangeCode: true, esMaestro: false };
+                    if (tab === 'residentes') { data.casa = form.casa; CATEGORIAS_ACCESO.forEach(cat => data[`permiso_${cat.id}`] = true); }
+                    await getColRef(colName).add(data);
+                    await logAction('Sistema', `Creó registro: ${finalName} en ${tab}`);
                     resetFormStates();
                 } catch (err) { alert("Error."); }
                 setIsActionLoading(false);
@@ -378,41 +387,44 @@
                         <div className="flex justify-between items-center mb-8 font-black">
                             <h2 className="text-xl font-black uppercase text-slate-800 tracking-tight leading-none">{tab}</h2>
                             <div className="flex gap-3">
-                                {role === 'superuser' && tab === 'bitacora' && <button onClick={resetSystem} className="bg-rose-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">REINICIAR SISTEMA</button>}
-                                {view === 'list' && tab !== 'bitacora' && <button onClick={() => setView('add')} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg flex items-center gap-2"><Icon name="plus-circle" /> Nuevo</button>}
+                                {role === 'superuser' && tab === 'bitacora' && <button onClick={resetSystem} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg border border-rose-500 active:scale-95 transition-all">REINICIAR SISTEMA</button>}
+                                {view === 'list' && tab !== 'bitacora' && <button onClick={() => setView('add')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl shadow-lg active:scale-95 transition-all font-black"><Icon name="plus-circle" /> Nuevo</button>}
                             </div>
                         </div>
 
                         {view === 'list' ? (
-                            <div className="overflow-x-auto rounded-3xl border border-slate-100">
+                            <div className="overflow-x-auto rounded-3xl border border-slate-100 font-medium font-black">
                                 <table className="w-full text-left text-sm font-black">
-                                    <thead className="bg-slate-50 font-black uppercase text-[10px] text-slate-400 border-b">
-                                        {tab === 'bitacora' ? <tr><th className="px-6 py-4">Fecha/Hora</th><th className="px-6">Descripción</th><th className="text-center px-6">INE</th></tr> :
-                                        <tr><th className="px-6 py-4">Nombre</th><th className="px-6">Referencia</th><th className="text-right pr-10">Acciones</th></tr>}
+                                    <thead className="bg-slate-50 font-black uppercase text-[10px] text-slate-400">
+                                        {tab === 'bitacora' ? <tr><th className="px-6 py-4">Fech/Hora</th><th className="px-6">Descripción</th><th className="text-center px-6">INE</th></tr> :
+                                        <tr><th className="px-6 py-4">Nombre</th><th className="px-6">Referencia</th>{isMaestro && <th className="text-right pr-10">Acciones</th>}</tr>}
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {(tab === 'residentes' ? habitantes : tab === 'guardias' ? agentes : filteredAdmins).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x => (
-                                            <tr key={x.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <tr key={x.id} className="hover:bg-slate-50/50 transition-colors font-black">
                                                 <td className="px-6 py-4 text-slate-700 font-black">{x.nombre} {x.esMaestro ? "⭐" : ""}</td>
                                                 <td className="px-6 py-4 text-slate-500 uppercase font-black">{x.casa || (x.esMaestro ? 'MAESTRO' : 'AUXILIAR')}</td>
                                                 <td className="px-6 py-4 text-right pr-10 flex justify-end gap-1 font-black">
-                                                    <button onClick={() => setPassRecovery({ col: tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins'), id: x.id, nombre: x.nombre })} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Icon name="key" className="w-4 h-4"/></button>
-                                                    <button onClick={() => deleteEntry(tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins'), x.id, x.nombre)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Icon name="trash" className="w-4 h-4"/></button>
+                                                    {isMaestro && <Fragment>
+                                                        {tab === 'residentes' && <button onClick={() => setEditResident(x)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg"><Icon name="edit" className="w-4 h-4"/></button>}
+                                                        <button onClick={() => setPassRecovery({ col: tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins'), id: x.id, nombre: x.nombre })} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg font-black"><Icon name="key" className="w-4 h-4"/></button>
+                                                        <button onClick={() => deleteEntry(tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins'), x.id, x.nombre)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg font-black"><Icon name="trash" className="w-4 h-4"/></button>
+                                                    </Fragment>}
                                                 </td>
                                             </tr>
                                         ))}
                                         {tab === 'bitacora' && displayLogs.sort((a,b)=>b.timestamp.localeCompare(a.timestamp)).map(l => (
-                                            <tr key={l.id} className={`hover:bg-slate-50 transition-colors ${l.tipo === 'Acceso Denegado' ? 'bg-rose-50/30' : ''}`}>
+                                            <tr key={l.id} className={`hover:bg-slate-50 transition-colors font-black ${l.tipo === 'Acceso Denegado' ? 'bg-rose-50/30' : ''}`}>
                                                 <td className="px-6 py-4 text-slate-400 tracking-tighter font-black">{new Date(l.timestamp).toLocaleString()}</td>
-                                                <td className="px-6 uppercase font-black text-slate-700 leading-tight">
+                                                <td className="px-6 uppercase font-bold text-slate-700 leading-tight font-black">
                                                     <div className="flex items-center gap-2">
-                                                        {l.tipo === 'Acceso Denegado' && <span className="text-rose-600"><Icon name="x-circle" className="w-4 h-4" /></span>}
+                                                        {l.tipo === 'Acceso Denegado' && <span className="text-rose-600 font-black"><Icon name="x-circle" className="w-4 h-4" /></span>}
                                                         {l.visitante || l.habitanteNombre || l.detalles}
                                                     </div>
                                                     <span className={`text-[9px] font-black uppercase tracking-widest mt-1 ${l.tipo === 'Acceso Denegado' ? 'text-rose-600' : 'text-blue-600'}`}>{l.subtipo || l.tipo} {l.autor ? `| ${l.autor}` : ''}</span>
                                                 </td>
                                                 <td className="text-center px-6">
-                                                    {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-200 shadow-sm transition-colors"><Icon name="image" className="w-4 h-4" /></button> : <span className="text-[8px] text-slate-300 font-black">N/A</span>}
+                                                    {l.fotoINE ? <button onClick={() => setSelectedPhoto(l.fotoINE)} className="p-2 bg-slate-100 rounded-xl text-blue-600 hover:bg-blue-200 shadow-sm transition-colors font-black"><Icon name="image" className="w-4 h-4 font-black" /></button> : <span className="text-[8px] text-slate-300 uppercase font-black font-black">N/A</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -422,40 +434,52 @@
                         ) : (
                             <div className="max-w-md mx-auto py-4 animate-fade-in font-black">
                                 <button onClick={() => setView('list')} className="mb-8 flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] active:scale-95 transition-all"><Icon name="arrow-left"/> Volver</button>
-                                <h2 className="text-3xl font-black uppercase text-slate-900 mb-8 tracking-tighter leading-none">Registrar {tab}</h2>
-                                <form onSubmit={handleSave} className="space-y-5 text-left">
+                                <h2 className="text-3xl font-black uppercase text-slate-900 mb-8 tracking-tighter leading-none uppercase">Registrar {tab}</h2>
+                                <form onSubmit={handleSave} className="space-y-5 text-left font-black">
                                     <input className="w-full p-5 bg-white border border-slate-200 rounded-[1.5rem] font-black outline-none focus:ring-4 focus:ring-blue-100 shadow-sm" placeholder="Nombre completo" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
                                     {tab === 'residentes' && <input className="w-full p-5 bg-white border border-slate-200 rounded-[1.5rem] font-black outline-none focus:ring-4 focus:ring-blue-100 shadow-sm" placeholder="Lote / Casa" value={form.casa} onChange={e => setForm({...form, casa: e.target.value})} required />}
                                     <PasswordInput name="password" placeholder="Contraseña (min 5)" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                                    {passError && <p className="text-rose-600 text-xs font-black mt-1 ml-2">{passError}</p>}
-                                    <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase shadow-xl mt-4 active:scale-95 transition-all tracking-widest text-[11px]">Guardar</button>
+                                    {passError && <p className="text-rose-600 text-xs font-bold mt-1 ml-2 font-black">{passError}</p>}
+                                    <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase shadow-xl mt-4 active:scale-95 transition-all tracking-widest text-[11px]">Completar Registro</button>
                                 </form>
                             </div>
                         )}
                     </div>
-                    {passRecovery && (
-                        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[600] flex items-center justify-center p-6 animate-fade-in font-black">
-                            <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-blue-600">
-                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl inline-block mb-6 shadow-sm"><Icon name="key" className="w-8 h-8"/></div>
-                                <h3 className="text-xl font-black uppercase text-slate-900 mb-1">Nueva Clave</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase mb-8">{passRecovery.nombre}</p>
-                                <form onSubmit={handlePassRecovery} className="space-y-4">
-                                    <PasswordInput name="newpass" placeholder="Contraseña (min 5)" />
-                                    {passError && <p className="text-rose-600 text-xs font-black mt-1 ml-2">{passError}</p>}
-                                    <div className="flex gap-3"><button type="button" onClick={() => setPassRecovery(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cerrar</button><button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Actualizar</button></div>
+                    {editResident && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[600] flex items-center justify-center p-6 animate-fade-in font-black">
+                            <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-slate-800">
+                                <h3 className="text-xl font-black uppercase text-slate-900 mb-1 font-black">Corregir Datos</h3>
+                                <form onSubmit={handleResidentUpdate} className="space-y-4 text-left mt-6">
+                                    <input name="editName" defaultValue={editResident.nombre} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" required />
+                                    <input name="editHouse" defaultValue={editResident.casa} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" required />
+                                    <div className="flex gap-3 pt-4 font-black font-black"><button type="button" onClick={() => setEditResident(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px]">Cerrar</button><button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-lg font-black">Actualizar</button></div>
                                 </form>
                             </div>
                         </div>
                     )}
+                    {passRecovery && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[600] flex items-center justify-center p-6 animate-fade-in font-black font-black font-black">
+                            <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-blue-600">
+                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl inline-block mb-6 shadow-sm"><Icon name="key" className="w-8 h-8 font-black"/></div>
+                                <h3 className="text-xl font-black uppercase text-slate-900 mb-1 font-black">Restablecer Clave</h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase mb-8">{passRecovery.nombre}</p>
+                                <form onSubmit={handlePassRecovery} className="space-y-4">
+                                    <PasswordInput name="newpass" placeholder="Nueva clave (min 5)" />
+                                    {passError && <p className="text-rose-600 text-xs font-bold mt-1 ml-2 font-black">{passError}</p>}
+                                    <div className="flex gap-3 font-black"><button type="button" onClick={() => setPassRecovery(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black uppercase text-[10px] font-black">Cerrar</button><button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg font-black">Actualizar</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedPhoto && (
                         <div className="fixed inset-0 bg-slate-900/95 z-[300] flex flex-col items-center justify-center p-6 backdrop-blur-md animate-fade-in no-print font-black">
                             <div className="max-w-3xl w-full flex flex-col gap-4">
-                                <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print">
-                                    <button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2"><Icon name="arrow-left" /> Volver</button>
-                                    <button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl"><Icon name="printer" /> Imprimir</button>
-                                    <button onClick={() => setSelectedPhoto(null)} className="text-white/50"><Icon name="x" className="w-7 h-7"/></button>
+                                <div className="flex justify-between items-center bg-white/10 p-4 rounded-3xl no-print font-black">
+                                    <div className="flex gap-3 font-black"><button onClick={() => setSelectedPhoto(null)} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 transition-all font-black font-black"><Icon name="arrow-left" /> Regresar</button><button onClick={() => window.print()} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-xl shadow-blue-500/20 font-black"><Icon name="printer" /> Imprimir</button></div>
+                                    <button onClick={() => setSelectedPhoto(null)} className="text-white/50 hover:text-white active:scale-75 font-black font-black"><Icon name="x" className="w-7 h-7"/></button>
                                 </div>
-                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl overflow-hidden" id="print-area"><img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block" alt="ID" /></div>
+                                <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border-4 border-white/20 overflow-hidden font-black font-black" id="print-area"><img src={selectedPhoto} className="w-full h-auto rounded-[2rem] block shadow-inner shadow-black/20 font-black" alt="ID" /></div>
                             </div>
                         </div>
                     )}
@@ -466,36 +490,43 @@
         function HabitanteModule({ habitante }) {
             const [updating, setUpdating] = useState(false);
             const currentClave = getClaveResidente(habitante.nombre, habitante.casa);
+
             const togglePermission = async (catId) => {
-                setUpdating(true); const field = `permiso_${catId}`;
+                setUpdating(true);
+                const field = `permiso_${catId}`;
                 await getColRef('habitantes').doc(habitante.id).update({ [field]: !habitante[field] });
                 setUpdating(false);
             };
+
             const isAllowed = (catId) => habitante[`permiso_${catId}`] !== false;
+
             return (
                 <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in font-sans font-black font-black">
-                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 font-black"></div>
+                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden font-black">
+                        <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 font-black font-black"></div>
                         <h2 className="text-2xl font-black uppercase mb-6 mt-2 tracking-tighter text-slate-900 leading-none">Pase Residencial</h2>
-                        <img src={getQRCodeURL(currentClave)} className="w-48 h-48 mx-auto mb-6 shadow-sm rounded-2xl border-8 border-slate-50" alt="QR" />
+                        <img src={getQRCodeURL(currentClave)} className="w-48 h-48 mx-auto mb-6 shadow-sm rounded-2xl border-8 border-slate-50 font-black" alt="QR" />
                         <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 w-full shadow-inner font-black">
                             <span className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest leading-none">ID Único</span>
-                            <p className="font-black text-blue-600 text-xl tracking-[0.2em] uppercase leading-none">{currentClave}</p>
+                            <p className="font-black text-blue-600 text-xl tracking-[0.2em] uppercase leading-none font-black">{currentClave}</p>
                         </div>
                     </div>
-                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 space-y-4">
+
+                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 space-y-4 font-black">
                         <h3 className="text-sm font-black uppercase text-slate-400 tracking-widest ml-4 mb-2">Permisos de Acceso</h3>
                         <div className="grid grid-cols-1 gap-3 font-black">
                             {CATEGORIAS_ACCESO.map(cat => (
-                                <button key={cat.id} onClick={() => togglePermission(cat.id)} disabled={updating} className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all active:scale-95 font-black ${isAllowed(cat.id) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700 opacity-60'}`}>
+                                <button key={cat.id} onClick={() => togglePermission(cat.id)} disabled={updating}
+                                    className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all active:scale-95 font-black ${isAllowed(cat.id) ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-black' : 'bg-rose-50 border-rose-200 text-rose-700 opacity-60'}`}
+                                >
                                     <div className="flex items-center gap-4 font-black">
-                                        <div className={`p-2 rounded-xl ${isAllowed(cat.id) ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><Icon name={cat.icon} className="w-5 h-5 font-black" /></div>
+                                        <div className={`p-2 rounded-xl ${isAllowed(cat.id) ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600 font-black'}`}><Icon name={cat.icon} className="w-5 h-5 font-black" /></div>
                                         <div className="flex flex-col items-start leading-none font-black font-black">
                                             <span className="text-xs font-black uppercase tracking-tight">{cat.label}</span>
                                             <span className="text-[9px] font-bold opacity-60 mt-1 uppercase">{isAllowed(cat.id) ? 'Autorizado' : 'Bloqueado'}</span>
                                         </div>
                                     </div>
-                                    <div className={`w-10 h-6 rounded-full relative transition-colors ${isAllowed(cat.id) ? 'bg-emerald-500' : 'bg-rose-500'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isAllowed(cat.id) ? 'right-1' : 'left-1'}`}></div></div>
+                                    <div className={`w-10 h-6 rounded-full relative transition-colors font-black ${isAllowed(cat.id) ? 'bg-emerald-500' : 'bg-rose-500'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isAllowed(cat.id) ? 'right-1' : 'left-1'}`}></div></div>
                                 </button>
                             ))}
                         </div>
@@ -532,29 +563,29 @@
             const filtered = search.length > 1 ? habitantes.filter(h => h.nombre.toLowerCase().includes(search.toLowerCase()) || h.casa.toLowerCase().includes(search.toLowerCase())) : [];
 
             return (
-                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20 font-black font-black">
-                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group">
+                <div className="space-y-6 max-w-5xl mx-auto py-2 animate-fade-in pb-20 font-black font-black font-black">
+                    <div className="bg-white p-5 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center gap-5 focus-within:ring-8 focus:ring-blue-50 transition-all group font-black font-black">
                         <Icon name="search" className="text-slate-300 w-10 h-10 transition-colors group-focus-within:text-blue-500 font-black" />
-                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Nombre o Domicilio..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input className="flex-1 outline-none text-xl font-black placeholder:text-slate-200 uppercase tracking-tighter" placeholder="Buscar por Nombre o Domicilio..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-black font-black font-black">
                         {filtered.map(h => (
                             <div key={h.id} className="bg-white rounded-[2.5rem] shadow-xl border-t-[12px] border-slate-800 flex flex-col animate-fade-in overflow-hidden font-black">
-                                <div className="p-6 space-y-4">
-                                    <h4 className="font-black text-slate-900 uppercase text-lg truncate">{h.nombre}</h4>
+                                <div className="p-6 space-y-4 font-black font-black">
+                                    <h4 className="font-black text-slate-900 uppercase text-lg truncate font-black font-black font-black">{h.nombre}</h4>
                                     <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex justify-between items-center font-black">
                                         <span className="text-[10px] text-slate-400 font-black uppercase">LOTE</span>
-                                        <span className="text-sm font-black text-blue-600">{h.casa}</span>
+                                        <span className="text-sm font-black text-blue-600 font-black">{h.casa}</span>
                                     </div>
-                                    <button onClick={() => { setSel(h); setStep(2); }} className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all">Verificar Entrada</button>
+                                    <button onClick={() => { setSel(h); setStep(2); }} className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all font-black">Verificar Entrada</button>
                                 </div>
                             </div>
                         ))}
                     </div>
                     {sel && (
-                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white p-6 sm:p-8 rounded-[3.5rem] w-full max-w-lg space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100 font-black">
-                                <h3 className="text-xl font-black uppercase text-slate-900 font-black uppercase font-black">Acceso a Domicilio</h3>
+                        <div className="fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto font-black font-black">
+                            <div className="bg-white p-6 sm:p-8 rounded-[3.5rem] w-full max-w-lg space-y-8 animate-fade-in relative text-center shadow-2xl border border-slate-100 font-black font-black">
+                                <h3 className="text-xl font-black uppercase text-slate-900 font-black uppercase font-black font-black">Acceso a Domicilio</h3>
                                 <div className="p-6 bg-slate-50 rounded-[3rem] border border-slate-100 leading-none font-black font-black"><p className="text-xl font-black text-slate-800 uppercase mb-1 font-black">{sel.nombre}</p><p className="text-blue-600 font-black text-[11px] uppercase tracking-widest font-black font-black">LOTE {sel.casa}</p></div>
                                 
                                 {step === 2 && (
@@ -567,15 +598,15 @@
                                                     <button key={cat.id} onClick={() => { setCatId(cat.id); setStep(3); }}
                                                         className={`flex flex-col items-center justify-center gap-1 p-4 rounded-3xl border-2 transition-all active:scale-90 font-black bg-white border-slate-100 text-slate-900 relative`}
                                                     >
-                                                        <div className={`p-4 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black relative flex items-center justify-center`}>
-                                                            <Icon name={cat.icon} className="w-8 h-8" />
+                                                        <div className={`p-3 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black relative`}>
+                                                            <Icon name={cat.icon} className="w-8 h-8 font-black" />
                                                             {!allowed && (
-                                                                <div className="diagonal-strike">BLOQUEADO</div>
+                                                                <div className="diagonal-strike font-black">BLOQUEADO</div>
                                                             )}
                                                         </div>
                                                         <div className="text-center font-black mt-2 font-black">
-                                                            <span className="text-[8px] uppercase leading-none block font-black mb-1">{cat.label}</span>
-                                                            {allowed && <span className="text-[7px] font-black uppercase text-emerald-500 font-black">PERMITIDO</span>}
+                                                            <span className="text-[8px] uppercase leading-none block font-black mb-1 font-black">{cat.label}</span>
+                                                            {allowed && <span className="text-[8px] font-black uppercase text-emerald-500 font-black font-black">PERMITIDO</span>}
                                                         </div>
                                                     </button>
                                                 );
@@ -584,24 +615,25 @@
                                     </div>
                                 )}
                                 {step === 3 && (
-                                    <div className="space-y-6 text-left font-black">
+                                    <div className="space-y-6 text-left font-black font-black font-black font-black">
                                         <div className={`${sel[`permiso_${catId}`] !== false ? 'bg-blue-600' : 'bg-rose-600'} text-white p-5 rounded-[2.5rem] flex items-center gap-5 font-black`}>
-                                            <div className="bg-white/20 p-3 rounded-2xl font-black font-black font-black"><Icon name={CATEGORIAS_ACCESO.find(c=>c.id===catId)?.icon} className="w-7 h-7 font-black" /></div>
-                                            <div className="leading-none font-black font-black font-black font-black font-black">
+                                            <div className="bg-white/20 p-3 rounded-2xl font-black font-black font-black font-black font-black"><Icon name={CATEGORIAS_ACCESO.find(c=>c.id===catId)?.icon} className="w-7 h-7 font-black font-black font-black" /></div>
+                                            <div className="leading-none font-black font-black font-black font-black">
                                                 <span className="text-[9px] font-black uppercase opacity-70">Entrada Clasificada</span>
-                                                <p className="font-black text-xl uppercase mt-1 font-black font-black font-black">{CATEGORIAS_ACCESO.find(c=>c.id===catId)?.label}</p>
+                                                <p className="font-black text-xl uppercase mt-1 font-black font-black">{CATEGORIAS_ACCESO.find(c=>c.id===catId)?.label}</p>
                                             </div>
                                         </div>
-                                        <div className="space-y-2 font-black font-black font-black font-black font-black">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 font-black font-black font-black">Nombre de quien ingresa</label>
-                                            <input ref={inputRef} style={{fontSize: '16px'}} className="w-full p-5 bg-slate-50 rounded-[2rem] border-2 border-slate-100 font-black outline-none focus:border-blue-500 uppercase text-center font-black" placeholder="Ej: Juan Manuel Pérez..." value={vName} onChange={e => setVName(e.target.value)} />
+                                        <div className="space-y-2 font-black font-black font-black font-black">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 font-black">Nombre de quien ingresa</label>
+                                            <input ref={inputRef} style={{fontSize: '16px'}} className="w-full p-5 bg-slate-50 rounded-[2rem] border-2 border-slate-100 font-black outline-none focus:border-blue-500 uppercase text-center font-black" placeholder="Nombre completo..." value={vName} onChange={e => setVName(e.target.value)} />
                                         </div>
-                                        <button onClick={() => setScanning(true)} className={`w-full py-6 rounded-[2.5rem] border-2 border-dashed flex items-center justify-center gap-4 transition-all font-black font-black font-black font-black font-black ${photo ? 'bg-emerald-50 border-emerald-600 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
-                                            <Icon name="camera" className="w-6 h-6 font-black font-black font-black font-black font-black" /> <span className="font-black tracking-widest text-[11px] uppercase font-black font-black font-black font-black">{photo ? "IFE CAPTURADA" : "TOMAR FOTO INE"}</span>
+                                        <button onClick={() => setScanning(true)} className={`w-full py-6 rounded-[2.5rem] border-2 border-dashed flex items-center justify-center gap-4 transition-all font-black font-black font-black font-black ${photo ? 'bg-emerald-50 border-emerald-600 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
+                                            <Icon name="camera" className="w-6 h-6 font-black font-black font-black font-black" /> <span className="font-black tracking-widest text-[11px] uppercase font-black font-black font-black">{photo ? "IDENTIFICACIÓN CAPTURADA" : "TOMAR FOTO INE"}</span>
                                         </button>
+                                        {photo && <img src={photo} className="w-full h-40 object-cover rounded-[2.5rem] border shadow-2xl font-black font-black" alt="INE" />}
                                     </div>
                                 )}
-                                <div className="flex gap-4 font-black font-black font-black font-black font-black font-black font-black"><button onClick={() => { if(step > 1) setStep(step - 1); else { setSel(null); setStep(1); setSearch(""); } }} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-[10px] font-black">Atrás / Cerrar</button>{step === 3 && (sel[`permiso_${catId}`] !== false ? <button disabled={!vName.trim()} onClick={() => handleReg(true)} className="flex-1 py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black">Autorizar</button> : <button onClick={() => handleReg(false)} className="flex-1 py-5 bg-rose-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black font-black font-black">Negar Acceso</button>)}</div>
+                                <div className="flex gap-4 font-black font-black font-black font-black"><button onClick={() => { if(step > 1) setStep(step - 1); else { setSel(null); setStep(1); setSearch(""); } }} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-[1.5rem] font-black uppercase text-[10px] font-black font-black">Atrás / Cerrar</button>{step === 3 && (sel[`permiso_${catId}`] !== false ? <button disabled={!vName.trim()} onClick={() => handleReg(true)} className="flex-1 py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black">Autorizar</button> : <button onClick={() => handleReg(false)} className="flex-1 py-5 bg-rose-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all font-black font-black">Negar Acceso</button>)}</div>
                             </div>
                         </div>
                     )}
@@ -659,30 +691,30 @@
                         }
                     }
                 }
-                if (foundUser) { setActiveUser(foundUser); setRole(foundRole); setAuthStep('dashboard'); setLoginError(false); await getColRef('bitacora').add({ tipo: 'Acceso Sistema', subtipo: foundRole.toUpperCase(), habitanteNombre: foundUser.nombre, timestamp: new Date().toISOString() }); }
+                if (foundUser) { setActiveUser(foundUser); setRole(foundRole); setAuthStep('dashboard'); setLoginError(false); await getColRef('bitacora').add({ tipo: 'Acceso Sistema', subtipo: foundRole.toUpperCase(), habitanteNombre: foundUser.nombre, timestamp: new Date().toISOString(), autorRole: foundRole === 'superuser' ? 'SUPERUSER' : (foundUser.esMaestro ? 'MAESTRO' : 'AUXILIAR') }); }
                 else { setLoginError(true); playErrorSound(); setTimeout(() => setLoginError(false), 800); }
             };
 
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white animate-splash-out p-6 font-black font-black font-black font-black">
-                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20 shadow-blue-600/30 font-black"><Icon name="shield" className="w-16 h-16 sm:w-24 sm:h-24 text-white shadow-2xl" /></div>
-                    <h1 className="responsive-title font-black text-center tracking-tighter px-2 font-black">{TITULO_SISTEMA}</h1>
-                    <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40 font-black font-black">{VERSION}</p>
+                    <div className="p-8 bg-blue-600 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.4)] animate-bounce mb-8 border border-blue-400/20 shadow-blue-600/30 font-black font-black"><Icon name="shield" className="w-16 h-16 sm:w-24 sm:h-24 text-white shadow-2xl" /></div>
+                    <h1 className="responsive-title font-black text-center tracking-tighter px-2 font-black font-black font-black">{TITULO_SISTEMA}</h1>
+                    <p className="mt-4 text-[10px] uppercase font-black tracking-[0.6em] text-white/40 font-black">{VERSION}</p>
                 </div>
             );
             if (loading) return null;
             if (authStep === 'login' && !activeUser) return (
-                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen animate-fade-in font-sans text-center font-black">
-                    <div className={`bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm border-2 text-center relative overflow-hidden transition-all duration-300 ${loginError ? 'shake border-rose-500 font-black' : 'border-slate-100 font-black'}`}>
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen animate-fade-in font-sans text-center font-black font-black font-black">
+                    <div className={`bg-white p-10 rounded-[3.5rem] shadow-2xl w-full max-w-sm border-2 text-center relative overflow-hidden transition-all duration-300 ${loginError ? 'shake border-rose-500 font-black' : 'border-slate-100 font-black font-black'}`}>
                         <div className={`absolute top-0 left-0 w-full h-2 ${loginError ? 'bg-rose-500 font-black' : 'bg-slate-900 font-black'}`}></div>
-                        <div className="flex justify-center mb-6 font-black font-black"><div className={`p-4 rounded-2xl shadow-xl transition-colors duration-300 ${loginError ? 'bg-rose-500' : 'bg-slate-900'} text-white font-black font-black font-black`}><Icon name={loginError ? "alert-circle" : "lock"} className="w-8 h-8 font-black font-black" /></div></div>
+                        <div className="flex justify-center mb-6 font-black font-black"><div className={`p-4 rounded-2xl shadow-xl transition-colors duration-300 ${loginError ? 'bg-rose-500' : 'bg-slate-900'} text-white font-black font-black`}><Icon name={loginError ? "alert-circle" : "lock"} className="w-8 h-8 font-black font-black" /></div></div>
                         <h2 className={`text-xl sm:text-2xl font-black transition-colors duration-300 ${loginError ? 'text-rose-600' : 'text-slate-900'} leading-tight tracking-tight px-2 break-words font-black`}>{TITULO_SISTEMA}</h2>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none mt-2 font-black font-black">{VERSION}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 tracking-widest leading-none mt-2 font-black font-black font-black font-black">{VERSION}</p>
                         <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left font-black">
                             <input name="name" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:ring-4 focus:ring-blue-100 shadow-sm font-black font-black" style={{fontSize: '16px'}} placeholder="Nombre completo" required />
                             <PasswordInput placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
-                            <button className={`w-full py-4 rounded-2xl font-black uppercase shadow-xl transition-all text-[11px] tracking-widest ${loginError ? 'bg-rose-500 font-black' : 'bg-slate-900 hover:bg-black font-black'} text-white font-black font-black font-black font-black`}>{loginError ? 'REINTENTAR' : 'Entrar al Sistema'}</button>
-                            <button type="button" onClick={forceReset} className="w-full mt-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-400 rounded-xl font-black uppercase text-[9px] tracking-[0.2em] transition-all flex items-center justify-center gap-2 font-black font-black font-black"><Icon name="log-out" className="w-3 h-3 font-black font-black" /> Salir / Regresar</button>
+                            <button className={`w-full py-4 rounded-2xl font-black uppercase shadow-xl transition-all text-[11px] tracking-widest ${loginError ? 'bg-rose-500 font-black' : 'bg-slate-900 hover:bg-black font-black'} text-white font-black font-black font-black font-black font-black`}>{loginError ? 'REINTENTAR' : 'Entrar al Sistema'}</button>
+                            <button type="button" onClick={forceReset} className="w-full mt-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-400 rounded-xl font-black uppercase text-[9px] tracking-[0.2em] transition-all flex items-center justify-center gap-2 font-black font-black font-black"><Icon name="log-out" className="w-3 h-3 font-black font-black font-black" /> Salir / Regresar</button>
                         </form>
                     </div>
                 </div>
@@ -690,26 +722,26 @@
 
             return (
                 <div className="h-full flex flex-col overflow-hidden bg-slate-50 animate-fade-in font-sans font-black font-black font-black">
-                    <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 font-black font-black">
-                        <div className="flex items-center gap-3 font-black font-black font-black font-black">
+                    <header className="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shadow-2xl shrink-0 z-[100] border-b border-slate-800 font-black">
+                        <div className="flex items-center gap-3 font-black">
                             <Icon name="shield" className="w-5 h-5 text-blue-500 font-black" />
-                            <div className="flex flex-col leading-none font-black overflow-hidden font-black font-black font-black">
-                                <span className="text-[10px] sm:text-xs tracking-tighter leading-none font-black truncate max-w-[120px] sm:max-w-none font-black font-black">{TITULO_SISTEMA}</span>
-                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1 uppercase font-black font-black">CONTROL - {VERSION}</span>
+                            <div className="flex flex-col leading-none font-black overflow-hidden font-black">
+                                <span className="text-[10px] sm:text-xs tracking-tighter leading-none font-black truncate max-w-[120px] sm:max-w-none font-black">{TITULO_SISTEMA}</span>
+                                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest mt-1 uppercase font-black">CONTROL - {VERSION}</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 font-sans font-black font-black font-black font-black">
+                        <div className="flex items-center gap-4 font-sans font-black font-black font-black">
                             <div className="flex flex-col items-end text-right font-black font-black font-black font-black font-black">
                                 <span className="text-[10px] font-black uppercase text-white leading-none mb-1 truncate max-w-[150px] font-black font-black">{activeUser?.nombre}</span>
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none uppercase font-black font-black font-black">
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none uppercase font-black font-black">
                                     {role === 'admin' ? (activeUser?.esMaestro ? 'ADMIN MAESTRO' : 'ADMIN AUXILIAR') : role === 'guardia' ? 'GUARDIA' : role === 'superuser' ? 'SÚPER USUARIO' : 'RESIDENTE'}
                                 </span>
                             </div>
-                            <button onClick={forceReset} className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-white rounded-lg font-bold text-[9px] uppercase transition-all shadow-lg border border-slate-700 font-black font-black uppercase font-black font-black font-black font-black">Salir</button>
+                            <button onClick={forceReset} className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-white rounded-lg font-bold text-[9px] uppercase transition-all shadow-lg border border-slate-700 font-black font-black font-black font-black">Salir</button>
                         </div>
                     </header>
-                    <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50 font-black font-black font-black font-black">
-                        <div className="max-w-7xl mx-auto w-full h-full no-print font-black font-black font-black font-black">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50 font-black font-black font-black">
+                        <div className="max-w-7xl mx-auto w-full h-full no-print font-black font-black font-black font-black font-black">
                             {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} activeUser={activeUser} onResetSuccess={forceReset} />}
                             {role === 'habitante' && <HabitanteModule habitante={habitantes.find(h => h.id === activeUser?.id) || activeUser} />}
                             {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
