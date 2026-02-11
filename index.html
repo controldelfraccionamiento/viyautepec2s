@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Viyautepec 2a Sección - Ver. 9.9.2</title>
+    <title>Viyautepec 2a Sección - Ver. 9.9.3</title>
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -30,20 +30,20 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* Animaciones */
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
         .animate-splash-out { animation: splashOut 0.5s ease-in forwards; animation-delay: 2.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes splashOut { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
 
-        /* Scanner UI */
+        /* Scanner UI - Proporciones exactas de una tarjeta ID (85.6 x 53.98 mm) */
         .scanner-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
             z-index: 10; pointer-events: none;
         }
         .scanner-guide {
-            width: 85vw; height: 53.8vw; max-width: 440px; max-height: 278px;
+            width: 85vw; height: calc(85vw * 0.63); /* Relación de aspecto ~1.58 */
+            max-width: 440px; max-height: 278px;
             position: relative; border-radius: 16px;
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 2px solid rgba(255, 255, 255, 0.6);
@@ -67,11 +67,11 @@
         .ring-circle {
             fill: transparent; stroke: #3b82f6; stroke-width: 6;
             stroke-dasharray: 283; stroke-dashoffset: 283;
-            transition: stroke-dashoffset 2.6s linear;
+            transition: stroke-dashoffset 2.8s linear;
         }
         .detecting .ring-circle { stroke-dashoffset: 0; }
 
-        /* Keyboard Adjustment con dVH para soporte móvil moderno */
+        /* Keyboard Adjustment */
         .keyboard-aware-modal {
             display: flex; flex-direction: column; justify-content: flex-end; 
             min-height: 100dvh; padding: 16px; overflow-y: auto;
@@ -95,8 +95,6 @@
             border-radius: 2px; text-transform: uppercase;
             background: rgba(255,255,255,0.1);
         }
-
-        /* Input Fix for iOS */
         input, select, textarea { font-size: 16px !important; }
     </style>
 </head>
@@ -119,28 +117,28 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 9.9.2";
+        const VERSION = "Ver. 9.9.3";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
 
-        // --- Audio Management (Global Context) ---
+        // --- Audio Management ---
         let audioCtx = null;
-        const resumeAudioContext = () => {
+        const initAudioContext = () => {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
         };
 
-        const playBeep = (freq = 1400, duration = 0.3) => {
-            resumeAudioContext();
+        const triggerBeep = (freq = 1400, vol = 0.5) => {
+            initAudioContext();
             try {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
                 osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); 
-                osc.stop(audioCtx.currentTime + duration);
-            } catch (e) { console.warn("Audio blocked by browser policy"); }
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch (e) { console.warn("Audio blocked"); }
         };
 
         const getColRef = (name) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(name);
@@ -168,7 +166,7 @@
             );
         };
 
-        // --- Módulo de Cámara (Recorte Proporcional Sin Deformar) ---
+        // --- Módulo de Cámara (Lógica de Recorte Sin Deformación) ---
         function CameraWidget({ mode, onCapture, onCancel }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -187,13 +185,12 @@
                     if(videoRef.current) videoRef.current.srcObject = s;
                     if (mode === 'INE') {
                         setIsSteady(true);
-                        timerRef.current = setTimeout(captureINE, 2800);
+                        timerRef.current = setTimeout(captureINE, 3000);
                     } else if (mode === 'QR') {
                         requestRef.current = requestAnimationFrame(scanQR);
                     }
                 })
-                .catch(() => { alert("Permite el acceso a la cámara."); onCancel(); });
-
+                .catch(() => { alert("Acceso a cámara denegado"); onCancel(); });
                 return () => {
                     if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
                     cancelAnimationFrame(requestRef.current);
@@ -211,7 +208,7 @@
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const code = jsQR(imageData.data, imageData.width, imageData.height);
                     if (code) {
-                        playBeep(1000, 0.2);
+                        triggerBeep(1000, 0.2);
                         onCapture(code.data);
                         return;
                     }
@@ -222,7 +219,7 @@
             const captureINE = async () => {
                 if (!videoRef.current || !guideRef.current || processing) return;
                 setProcessing(true);
-                playBeep(1400, 0.4);
+                triggerBeep(1400, 0.4);
                 setIsFlashing(true);
                 setTimeout(() => setIsFlashing(false), 200);
 
@@ -231,30 +228,47 @@
                 const c = canvasRef.current;
                 const ctx = c.getContext('2d');
 
+                // LÓGICA DE RECORTE MATEMÁTICO SIN DEFORMACIÓN
+                const vw = v.videoWidth;
+                const vh = v.videoHeight;
+                const videoRatio = vw / vh;
+                
                 const vRect = v.getBoundingClientRect();
                 const gRect = g.getBoundingClientRect();
+                
+                // Calculamos el área "real" visible si el video está en object-fit: cover
+                let displayedW, displayedH, offsetX = 0, offsetY = 0;
+                const elementRatio = vRect.width / vRect.height;
 
-                // Escalado proporcional real
-                const scaleX = v.videoWidth / vRect.width;
-                const scaleY = v.videoHeight / vRect.height;
+                if (videoRatio > elementRatio) {
+                    displayedH = vRect.height;
+                    displayedW = vRect.height * videoRatio;
+                    offsetX = (displayedW - vRect.width) / 2;
+                } else {
+                    displayedW = vRect.width;
+                    displayedH = vRect.width / videoRatio;
+                    offsetY = (displayedH - vRect.height) / 2;
+                }
 
-                const sx = (gRect.left - vRect.left) * scaleX;
-                const sy = (gRect.top - vRect.top) * scaleY;
-                const sw = gRect.width * scaleX;
-                const sh = gRect.height * scaleY;
+                const scale = vw / displayedW;
 
-                // Definimos el canvas con las dimensiones exactas del recorte
+                const sx = (gRect.left - vRect.left + offsetX) * scale;
+                const sy = (gRect.top - vRect.top + offsetY) * scale;
+                const sw = gRect.width * scale;
+                const sh = gRect.height * scale;
+
+                // Forzamos al canvas a tener las proporciones del recorte para evitar estiramiento
                 c.width = sw;
                 c.height = sh;
                 ctx.drawImage(v, sx, sy, sw, sh, 0, 0, sw, sh);
-                const fullImg = c.toDataURL('image/jpeg', 0.92);
+                const fullImg = c.toDataURL('image/jpeg', 0.95);
 
-                // Mini-canvas para OCR (mejorado para Tesseract)
+                // Preparación de mini-canvas para OCR (zona izquierda)
                 const ocrCanvas = document.createElement('canvas');
                 ocrCanvas.width = sw * 0.6;
                 ocrCanvas.height = sh;
                 const ocrCtx = ocrCanvas.getContext('2d');
-                ocrCtx.filter = 'grayscale(100%) contrast(200%) brightness(110%)';
+                ocrCtx.filter = 'grayscale(100%) contrast(200%) brightness(105%)';
                 ocrCtx.drawImage(c, 0, 0, sw * 0.6, sh, 0, 0, sw * 0.6, sh);
 
                 try {
@@ -264,12 +278,12 @@
                     const name = nameIdx !== -1 ? lines.slice(nameIdx + 1, nameIdx + 4).join(' ') : "No detectado";
                     onCapture({ img: fullImg, name });
                 } catch (e) {
-                    onCapture({ img: fullImg, name: "Revisar Nombre" });
+                    onCapture({ img: fullImg, name: "Revisar Manualmente" });
                 }
             };
 
             return (
-                <div className="fixed inset-0 bg-black z-[600] flex flex-col items-center justify-center overflow-hidden">
+                <div className="fixed inset-0 bg-black z-[600] flex flex-col items-center justify-center overflow-hidden font-black">
                     <div className={`camera-flash ${isFlashing ? 'active' : ''}`} />
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                     <div className="scanner-container">
@@ -281,11 +295,24 @@
                     </div>
                     <div className="absolute top-12 w-full text-center px-4 font-black">
                         <div className="bg-black/70 py-4 px-8 rounded-3xl inline-block border border-white/10 text-white shadow-2xl">
-                            {processing ? "EXTRAYENDO DATOS..." : mode === 'QR' ? "ESCANEANDO QR" : "MANTENGA FIRME EL INE"}
+                            {processing ? "EXTRAYENDO NOMBRE..." : mode === 'QR' ? "ESCANEANDO QR" : "ENFOQUE EL INE (AUTO-CAPTURA)"}
                         </div>
                     </div>
                     <button onClick={onCancel} className="absolute bottom-12 px-8 py-3 bg-white/20 text-white rounded-full border border-white/40 font-black uppercase text-xs">Cancelar</button>
                     <canvas ref={canvasRef} className="hidden" />
+                </div>
+            );
+        }
+
+        // --- Componente Password Input ---
+        function PasswordInput({ placeholder, value, onChange }) {
+            const [show, setShow] = useState(false);
+            return (
+                <div className="relative">
+                    <input type={show ? "text" : "password"} placeholder={placeholder} value={value} onChange={onChange} className="w-full p-4 pr-12 bg-white border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-blue-100 shadow-sm font-black" required />
+                    <button type="button" onClick={() => setShow(!show)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        <Icon name={show ? "eye-off" : "eye"} className="w-5 h-5" />
+                    </button>
                 </div>
             );
         }
@@ -316,7 +343,7 @@
                     alert(`Acceso Registrado: ${resident.nombre}`);
                     setFlowMode(null);
                 } else {
-                    alert("QR inválido o no reconocido.");
+                    alert("QR no válido.");
                 }
                 setScanning(false);
             };
@@ -328,7 +355,7 @@
                 setScanning(false);
             };
 
-            const saveVisitorAccess = async (approved) => {
+            const handleSaveVisitor = async (approved) => {
                 await getColRef('bitacora').add({
                     tipo: approved ? 'Visita' : 'Acceso Denegado',
                     subtipo: catId ? (CATEGORIAS_ACCESO.find(c => c.id === catId)?.label.toUpperCase()) : 'VISITA',
@@ -343,14 +370,14 @@
             };
 
             if (!flowMode) return (
-                <div className="p-6 space-y-8 animate-fade-in flex flex-col items-center justify-center min-h-[70vh]">
+                <div className="p-6 space-y-8 animate-fade-in flex flex-col items-center justify-center min-h-[70vh] font-black">
                     <h2 className="text-2xl font-black uppercase text-slate-800 text-center">Menú de Acceso</h2>
                     <div className="grid gap-6 w-full max-w-md">
-                        <button onClick={() => { resumeAudioContext(); setFlowMode('residente'); setScanning(true); }} className="p-8 bg-blue-600 text-white rounded-[3rem] shadow-xl flex flex-col items-center gap-4 active:scale-95 transition-all">
+                        <button onClick={() => { initAudioContext(); setFlowMode('residente'); setScanning(true); }} className="p-8 bg-blue-600 text-white rounded-[3rem] shadow-xl flex flex-col items-center gap-4 active:scale-95 transition-all">
                             <Icon name="refresh" className="w-12 h-12" />
                             <span className="font-black text-lg uppercase">Residente (QR)</span>
                         </button>
-                        <button onClick={() => { resumeAudioContext(); setFlowMode('visita'); }} className="p-8 bg-slate-900 text-white rounded-[3rem] shadow-xl flex flex-col items-center gap-4 active:scale-95 transition-all">
+                        <button onClick={() => { initAudioContext(); setFlowMode('visita'); }} className="p-8 bg-slate-900 text-white rounded-[3rem] shadow-xl flex flex-col items-center gap-4 active:scale-95 transition-all">
                             <Icon name="user" className="w-12 h-12" />
                             <span className="font-black text-lg uppercase">Visita (INE)</span>
                         </button>
@@ -366,33 +393,33 @@
 
             return (
                 <div className="p-4 space-y-4 font-black">
-                    <button onClick={() => setFlowMode(null)} className="text-slate-400 text-[10px] mb-2 uppercase font-black">← Menú Principal</button>
+                    <button onClick={() => setFlowMode(null)} className="text-slate-400 text-[10px] mb-2 uppercase font-black font-black">← Menú Principal</button>
                     <div className="bg-white p-4 rounded-2xl shadow-sm flex items-center gap-3 border border-slate-200">
                         <Icon name="search" className="text-slate-400 w-6 h-6" />
-                        <input className="flex-1 outline-none text-lg font-black" placeholder="Lote o Nombre..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input className="flex-1 outline-none text-lg font-black" placeholder="Buscar residente o lote..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <div className="grid gap-4">
                         {list.map(h => (
-                            <div key={h.id} className="bg-white p-5 rounded-3xl shadow-md border-t-8 border-slate-800">
+                            <div key={h.id} className="bg-white p-5 rounded-3xl shadow-md border-t-8 border-slate-800 font-black">
                                 <h3 className="text-lg uppercase mb-1 font-black">{h.nombre}</h3>
                                 <p className="text-blue-600 mb-4 font-black text-sm">LOTE: {h.casa}</p>
-                                <button onClick={() => setSelected(h)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-xs">REGISTRAR VISITA</button>
+                                <button onClick={() => setSelected(h)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-xs font-black">REGISTRAR VISITA</button>
                             </div>
                         ))}
                     </div>
 
                     {selected && (
-                        <div className="fixed inset-0 bg-slate-950/90 z-[500] overflow-y-auto">
+                        <div className="fixed inset-0 bg-slate-950/90 z-[500] overflow-y-auto font-black">
                             <div className="keyboard-aware-modal w-full max-w-md mx-auto font-black font-black">
-                                <div className="bg-white p-6 sm:p-8 rounded-[3.5rem] w-full space-y-6 text-center shadow-2xl border border-slate-100">
-                                    <h2 className="text-xl font-black uppercase">Entrada de Visita</h2>
+                                <div className="bg-white p-6 sm:p-8 rounded-[3rem] w-full space-y-6 text-center shadow-2xl border border-slate-100 font-black">
+                                    <h2 className="text-xl font-black uppercase font-black">Registro de Visita</h2>
                                     <div className="p-4 bg-slate-100 rounded-[2.5rem]">
-                                        <p className="font-black text-lg uppercase">{selected.nombre}</p>
-                                        <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest">LOTE {selected.casa}</p>
+                                        <p className="font-black text-lg uppercase font-black">{selected.nombre}</p>
+                                        <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest font-black">LOTE {selected.casa}</p>
                                     </div>
                                     
                                     {step === 1 && (
-                                        <div className="space-y-6">
+                                        <div className="space-y-6 font-black font-black">
                                             <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest">Seleccione Categoría</p>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {CATEGORIAS_ACCESO.map(cat => {
@@ -401,11 +428,11 @@
                                                         <button key={cat.id} onClick={() => { setCatId(cat.id); setStep(2); }}
                                                             className={`flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all relative ${allowed ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'}`}
                                                         >
-                                                            <div className={`p-3 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black`}>
-                                                                <Icon name={cat.icon} className="w-8 h-8 font-black" />
-                                                                {!allowed && <div className="diagonal-strike">BLOQUEADO</div>}
+                                                            <div className={`p-3 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black font-black`}>
+                                                                <Icon name={cat.icon} className="w-8 h-8 font-black font-black" />
+                                                                {!allowed && <div className="diagonal-strike font-black font-black">BLOQUEADO</div>}
                                                             </div>
-                                                            <span className="text-[9px] uppercase mt-2 font-black">{cat.label}</span>
+                                                            <span className="text-[9px] uppercase mt-2 font-black font-black font-black">{cat.label}</span>
                                                         </button>
                                                     );
                                                 })}
@@ -415,31 +442,31 @@
 
                                     {step === 2 && (
                                         <div className="space-y-4 font-black">
-                                            <p className="text-xs uppercase text-slate-500 font-black">Escanee el frente del INE</p>
-                                            <button onClick={() => { resumeAudioContext(); setScanning(true); }} className="w-24 h-24 mx-auto bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-                                                <Icon name="camera" className="w-12 h-12" />
+                                            <p className="text-xs uppercase text-slate-500 font-black">Escaneo de Identificación</p>
+                                            <button onClick={() => { initAudioContext(); setScanning(true); }} className="w-24 h-24 mx-auto bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform font-black font-black">
+                                                <Icon name="camera" className="w-12 h-12 font-black font-black" />
                                             </button>
                                         </div>
                                     )}
 
                                     {step === 3 && (
-                                        <div className="space-y-4 text-left">
+                                        <div className="space-y-4 text-left font-black font-black">
                                             <div>
-                                                <label className="text-[10px] uppercase text-slate-400 ml-2 font-black">Nombre del Visitante</label>
-                                                <input className={`w-full p-4 rounded-2xl border-2 font-black uppercase text-center ${isManual ? 'border-blue-500 bg-white' : 'border-slate-100 bg-slate-50'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
+                                                <label className="text-[10px] uppercase text-slate-400 ml-2 font-black font-black">Nombre del Visitante</label>
+                                                <input className={`w-full p-4 rounded-xl border-2 font-black uppercase text-center font-black ${isManual ? 'border-blue-500 bg-white' : 'border-slate-100 bg-slate-50'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
                                             </div>
-                                            {photo && <img src={photo} className="w-full h-44 object-cover rounded-[2rem] border shadow-inner" alt="Recorte" />}
-                                            <div className="flex justify-between px-2">
+                                            {photo && <img src={photo} className="w-full h-44 object-cover rounded-[2rem] border shadow-inner font-black" alt="Recorte" />}
+                                            <div className="flex justify-between px-2 font-black font-black">
                                                 <button onClick={() => setScanning(true)} className="text-blue-600 text-[11px] font-black underline uppercase">Reintentar</button>
                                                 <button onClick={() => setIsManual(true)} className="text-slate-400 text-[11px] font-black underline uppercase">Editar</button>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="flex gap-3 pt-2">
-                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase text-xs">Atrás</button>
+                                    <div className="flex gap-3 pt-2 font-black">
+                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-xl font-black uppercase text-xs font-black">Atrás</button>
                                         {step === 3 && (
-                                            <button onClick={() => saveVisitorAccess(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">AUTORIZAR</button>
+                                            <button onClick={() => handleSaveVisitor(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs shadow-lg font-black">Autorizar</button>
                                         )}
                                     </div>
                                 </div>
@@ -451,7 +478,7 @@
             );
         }
 
-        // --- Dashboard Administración ---
+        // --- Panel Administrativo ---
         function AdminDashboard({ habitantes, logs, role }) {
             const [tab, setTab] = useState('bitacora');
             const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -459,25 +486,25 @@
 
             return (
                 <div className="p-4 space-y-4 font-black">
-                    <div className="flex gap-2 overflow-x-auto pb-2">
+                    <div className="flex gap-2 overflow-x-auto pb-2 font-black">
                         {['bitacora', 'residentes'].map(t => (
                             <button key={t} onClick={() => setTab(t)} className={`px-5 py-2 rounded-xl text-[10px] uppercase font-black ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'}`}>{t}</button>
                         ))}
                     </div>
-                    <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-[500px]">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 min-h-[500px] font-black font-black">
                         <h2 className="text-xl uppercase text-slate-800 mb-6 font-black">{tab}</h2>
                         <div className="overflow-x-auto rounded-3xl border border-slate-100">
                             <table className="w-full text-left text-sm font-black">
-                                <thead className="bg-slate-50 font-black uppercase text-[10px] text-slate-400 border-b">
-                                    <tr><th className="px-4 py-4">Sujeto</th><th className="px-4">Lote</th><th className="text-right pr-6">Acción</th></tr>
+                                <thead className="bg-slate-50 uppercase text-[10px] text-slate-400 border-b">
+                                    <tr><th className="px-4 py-4 font-black font-black">Sujeto</th><th className="px-4 font-black">Lote</th><th className="text-right pr-6 font-black">Acción</th></tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-50">
+                                <tbody className="divide-y divide-slate-50 font-black">
                                     {(tab==='bitacora' ? displayLogs : habitantes).sort((a,b)=> (b.timestamp || "").localeCompare(a.timestamp || "")).map(x => (
-                                        <tr key={x.id} className="border-b font-black">
-                                            <td className="px-4 py-4">{x.visitante || x.nombre}</td>
-                                            <td className="px-4 py-4 text-slate-500 uppercase text-xs">{x.lote || x.casa || 'N/A'}</td>
-                                            <td className="px-4 py-4 text-right pr-6">
-                                                {(x.fotoINE || x.foto) && <button onClick={() => setSelectedPhoto(x.fotoINE || x.foto)} className="p-2 text-blue-600"><Icon name="image" /></button>}
+                                        <tr key={x.id} className="border-b">
+                                            <td className="px-4 py-4 font-black font-black">{x.visitante || x.nombre}</td>
+                                            <td className="px-4 py-4 text-slate-500 uppercase text-xs font-black">{x.lote || x.casa || 'N/A'}</td>
+                                            <td className="px-4 py-4 text-right pr-6 font-black">
+                                                {x.fotoINE && <button onClick={() => setSelectedPhoto(x.fotoINE)} className="p-2 text-blue-600 font-black font-black font-black font-black font-black font-black"><Icon name="image" /></button>}
                                             </td>
                                         </tr>
                                     ))}
@@ -486,8 +513,8 @@
                         </div>
                     </div>
                     {selectedPhoto && (
-                        <div className="fixed inset-0 bg-black/95 z-[700] flex flex-col items-center justify-center p-6 backdrop-blur-md" onClick={() => setSelectedPhoto(null)}>
-                            <img src={selectedPhoto} className="max-w-full max-h-[85vh] rounded-3xl shadow-2xl" />
+                        <div className="fixed inset-0 bg-black/95 z-[700] flex flex-col items-center justify-center p-6 backdrop-blur-md font-black" onClick={() => setSelectedPhoto(null)}>
+                            <img src={selectedPhoto} className="max-w-full max-h-[85vh] rounded-3xl shadow-2xl font-black" />
                             <button className="mt-8 px-10 py-3 bg-white text-black rounded-full font-black uppercase text-sm font-black">Cerrar</button>
                         </div>
                     )}
@@ -495,10 +522,9 @@
             );
         }
 
-        // --- App Principal ---
+        // --- Componente Principal ---
         function App() {
             const [showSplash, setShowSplash] = useState(true);
-            const [user, setUser] = useState(null);
             const [role, setRole] = useState(null);
             const [activeUser, setActiveUser] = useState(null);
             const [habitantes, setHabitantes] = useState([]);
@@ -509,18 +535,15 @@
 
             useEffect(() => {
                 const timer = setTimeout(() => setShowSplash(false), 3000);
-                auth.signInAnonymously().then(() => auth.onAuthStateChanged(u => setUser(u)));
-                return () => clearTimeout(timer);
-            }, []);
-
-            useEffect(() => {
-                if (!user) return;
+                auth.signInAnonymously().then(() => auth.onAuthStateChanged(u => { if(!u) return; }));
+                
                 const unsub1 = getColRef('habitantes').onSnapshot(s => setHabitantes(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 const unsub2 = getColRef('bitacora').onSnapshot(s => setLogs(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 const unsub3 = getColRef('admins').onSnapshot(s => setAdmins(s.docs.map(d => ({id: d.id, ...d.data()}))));
                 const unsub4 = getColRef('agentes').onSnapshot(s => setAgentes(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
-            }, [user]);
+                
+                return () => { unsub1(); unsub2(); unsub3(); unsub4(); clearTimeout(timer); };
+            }, []);
 
             const handleLogin = (name, pass) => {
                 const formattedName = toTitleCase(name.trim());
@@ -535,7 +558,7 @@
                         else {
                             const g = agentes.find(ga => ga.nombre === formattedName && ga.password === pass);
                             if (g) { setActiveUser(g); setRole('guardia'); }
-                            else { alert("Credenciales incorrectas"); }
+                            else { alert("Acceso denegado"); }
                         }
                     }
                 }
@@ -544,38 +567,38 @@
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white font-black">
                     <div className="p-8 bg-blue-600 rounded-[3rem] animate-pulse mb-6"><Icon name="shield" className="w-16 h-16 font-black" /></div>
-                    <h1 className="text-3xl uppercase tracking-tighter text-center px-4">{TITULO_SISTEMA}</h1>
+                    <h1 className="text-3xl uppercase tracking-tighter text-center px-4 font-black">{TITULO_SISTEMA}</h1>
                     <p className="mt-2 text-[10px] uppercase font-black tracking-widest text-white/40">{VERSION}</p>
                 </div>
             );
 
             if (!activeUser) return (
-                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black">
-                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900"></div>
-                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800" />
-                        <h2 className="text-2xl mb-6 uppercase tracking-tighter">{TITULO_SISTEMA}</h2>
-                        <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left">
-                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" placeholder="Nombre completo" required />
-                            <input type="password" placeholder="Contraseña" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
-                            <button onClick={resumeAudioContext} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase shadow-lg font-black mt-2">INGRESAR</button>
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black">
+                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden font-black font-black">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900 font-black"></div>
+                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800 font-black" />
+                        <h2 className="text-2xl mb-6 uppercase tracking-tighter font-black">{TITULO_SISTEMA}</h2>
+                        <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left font-black font-black">
+                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none font-black font-black" placeholder="Nombre de Usuario" required />
+                            <PasswordInput placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
+                            <button onClick={initAudioContext} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase shadow-lg font-black mt-2 font-black font-black font-black font-black">INGRESAR</button>
                         </form>
                     </div>
                 </div>
             );
 
             return (
-                <div className="h-full flex flex-col bg-slate-50">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black">
-                        <div className="flex items-center gap-2 font-black">
-                            <Icon name="shield" className="w-6 h-6 text-blue-400" />
-                            <span className="text-[11px] uppercase tracking-tighter">{TITULO_SISTEMA}</span>
+                <div className="h-full flex flex-col bg-slate-50 font-black font-black font-black">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black font-black">
+                        <div className="flex items-center gap-2">
+                            <Icon name="shield" className="w-6 h-6 text-blue-400 font-black font-black font-black" />
+                            <span className="text-[11px] uppercase tracking-tighter font-black font-black">{TITULO_SISTEMA}</span>
                         </div>
-                        <button onClick={() => { setRole(null); setActiveUser(null); }} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase">SALIR</button>
+                        <button onClick={() => { setRole(null); setActiveUser(null); }} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase font-black font-black font-black">SALIR</button>
                     </header>
-                    <main className="flex-1 overflow-y-auto">
+                    <main className="flex-1 overflow-y-auto font-black font-black font-black">
                         {(role === 'admin' || role === 'superuser') && <AdminDashboard habitantes={habitantes} logs={logs} role={role} />}
-                        {role === 'habitante' && <div className="p-6 text-center"><h1 className="text-xl font-black mb-2 uppercase">Bienvenido {activeUser.nombre}</h1><p className="text-slate-400 text-sm">Tu cuenta de residente está activa.</p></div>}
+                        {role === 'habitante' && <div className="p-6 text-center font-black"><h1 className="text-xl font-black mb-2 uppercase font-black font-black">Hola {activeUser.nombre}</h1><p className="text-slate-400 text-sm font-black font-black font-black font-black">Tu cuenta está activa.</p></div>}
                         {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
                     </main>
                 </div>
