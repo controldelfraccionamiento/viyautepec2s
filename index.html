@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Viyautepec 2a Sección - Ver. 9.9.3</title>
+    <title>Viyautepec 2a Sección - Ver. 10.1</title>
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -12,7 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <!-- Herramientas de Escaneo -->
+    <!-- Herramientas de Escaneo y OCR -->
     <script src="https://unpkg.com/tesseract.js@v5.0.3/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
@@ -35,14 +35,15 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes splashOut { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
 
-        /* Scanner UI - Proporciones exactas de una tarjeta ID (85.6 x 53.98 mm) */
+        /* Scanner UI */
         .scanner-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
             z-index: 10; pointer-events: none;
         }
+        /* Guía Proporcional para ID - No se deforma */
         .scanner-guide {
-            width: 85vw; height: calc(85vw * 0.63); /* Relación de aspecto ~1.58 */
+            width: 85vw; height: calc(85vw * 0.63);
             max-width: 440px; max-height: 278px;
             position: relative; border-radius: 16px;
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
@@ -67,7 +68,7 @@
         .ring-circle {
             fill: transparent; stroke: #3b82f6; stroke-width: 6;
             stroke-dasharray: 283; stroke-dashoffset: 283;
-            transition: stroke-dashoffset 2.8s linear;
+            transition: stroke-dashoffset 2.6s linear;
         }
         .detecting .ring-circle { stroke-dashoffset: 0; }
 
@@ -117,8 +118,16 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 9.9.3";
+        const VERSION = "Ver. 10.1";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
+
+        const CATEGORIAS_ACCESO = [
+            { id: 'visita', label: 'Visita', icon: 'user', color: 'emerald' },
+            { id: 'delivery', label: 'Delivery', icon: 'motorcycle', color: 'orange' },
+            { id: 'paquetería', label: 'Paquetería', icon: 'package', color: 'blue' },
+            { id: 'empleado', label: 'Empleado', icon: 'worker-helmet', color: 'amber' },
+            { id: 'construccion', label: 'Mat. Construcción', icon: 'truck', color: 'slate' }
+        ];
 
         // --- Audio Management ---
         let audioCtx = null;
@@ -157,7 +166,12 @@
                 "x-circle": <Fragment><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Fragment>,
                 refresh: <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke="currentColor" strokeWidth="2" fill="none" />,
                 "eye-off": <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/>,
-                eye: <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                eye: <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>,
+                motorcycle: <path d="M5 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm14 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 18h12m-9 0 1-4h5l1 4m-7-4h6l-1-4h-4zM16 10l-1.5-3h-5L8 10"/>,
+                package: <Fragment><path d="M16.5 9.4L7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></Fragment>,
+                "worker-helmet": <Fragment><path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M8 5a5 5 0 0 1 8 0M12 2v3"/></Fragment>,
+                truck: <path d="M1 3h15v13H1V3zm15 5h4l3 3v5h-7V8zM5.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>,
+                "arrow-left": <path d="M19 12H5m7-7-7 7 7 7" stroke="currentColor" strokeWidth="2" fill="none" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -166,7 +180,7 @@
             );
         };
 
-        // --- Módulo de Cámara (Lógica de Recorte Sin Deformación) ---
+        // --- Módulo de Cámara (Lógica de Recorte Sin Deformación Mejorada) ---
         function CameraWidget({ mode, onCapture, onCancel }) {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -185,7 +199,7 @@
                     if(videoRef.current) videoRef.current.srcObject = s;
                     if (mode === 'INE') {
                         setIsSteady(true);
-                        timerRef.current = setTimeout(captureINE, 3000);
+                        timerRef.current = setTimeout(captureINE, 3200); // 3.2s para dar tiempo a enfoque
                     } else if (mode === 'QR') {
                         requestRef.current = requestAnimationFrame(scanQR);
                     }
@@ -223,23 +237,23 @@
                 setIsFlashing(true);
                 setTimeout(() => setIsFlashing(false), 200);
 
-                const v = videoRef.current;
-                const g = guideRef.current;
-                const c = canvasRef.current;
-                const ctx = c.getContext('2d');
+                const video = videoRef.current;
+                const guide = guideRef.current;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
 
-                // LÓGICA DE RECORTE MATEMÁTICO SIN DEFORMACIÓN
-                const vw = v.videoWidth;
-                const vh = v.videoHeight;
+                // Lógica de Recorte Proporcional (No Estirar)
+                const vw = video.videoWidth;
+                const vh = video.videoHeight;
                 const videoRatio = vw / vh;
                 
-                const vRect = v.getBoundingClientRect();
-                const gRect = g.getBoundingClientRect();
+                const vRect = video.getBoundingClientRect();
+                const gRect = guide.getBoundingClientRect();
                 
-                // Calculamos el área "real" visible si el video está en object-fit: cover
                 let displayedW, displayedH, offsetX = 0, offsetY = 0;
                 const elementRatio = vRect.width / vRect.height;
 
+                // Calculamos el factor de escala real del video proyectado
                 if (videoRatio > elementRatio) {
                     displayedH = vRect.height;
                     displayedW = vRect.height * videoRatio;
@@ -257,19 +271,21 @@
                 const sw = gRect.width * scale;
                 const sh = gRect.height * scale;
 
-                // Forzamos al canvas a tener las proporciones del recorte para evitar estiramiento
-                c.width = sw;
-                c.height = sh;
-                ctx.drawImage(v, sx, sy, sw, sh, 0, 0, sw, sh);
-                const fullImg = c.toDataURL('image/jpeg', 0.95);
+                // Sincronizamos tamaño de canvas con el recorte real
+                canvas.width = sw;
+                canvas.height = sh;
+                
+                // Dibujamos el recorte exacto
+                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+                const fullImg = canvas.toDataURL('image/jpeg', 0.95);
 
-                // Preparación de mini-canvas para OCR (zona izquierda)
+                // Mini-canvas para OCR (Zona izquierda del nombre)
                 const ocrCanvas = document.createElement('canvas');
                 ocrCanvas.width = sw * 0.6;
                 ocrCanvas.height = sh;
                 const ocrCtx = ocrCanvas.getContext('2d');
-                ocrCtx.filter = 'grayscale(100%) contrast(200%) brightness(105%)';
-                ocrCtx.drawImage(c, 0, 0, sw * 0.6, sh, 0, 0, sw * 0.6, sh);
+                ocrCtx.filter = 'grayscale(100%) contrast(210%) brightness(105%)';
+                ocrCtx.drawImage(canvas, 0, 0, sw * 0.6, sh, 0, 0, sw * 0.6, sh);
 
                 try {
                     const result = await Tesseract.recognize(ocrCanvas, 'spa');
@@ -283,7 +299,7 @@
             };
 
             return (
-                <div className="fixed inset-0 bg-black z-[600] flex flex-col items-center justify-center overflow-hidden font-black">
+                <div className="fixed inset-0 bg-black z-[600] flex flex-col items-center justify-center overflow-hidden">
                     <div className={`camera-flash ${isFlashing ? 'active' : ''}`} />
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                     <div className="scanner-container">
@@ -304,7 +320,6 @@
             );
         }
 
-        // --- Componente Password Input ---
         function PasswordInput({ placeholder, value, onChange }) {
             const [show, setShow] = useState(false);
             return (
@@ -355,7 +370,7 @@
                 setScanning(false);
             };
 
-            const handleSaveVisitor = async (approved) => {
+            const saveVisitorAccess = async (approved) => {
                 await getColRef('bitacora').add({
                     tipo: approved ? 'Visita' : 'Acceso Denegado',
                     subtipo: catId ? (CATEGORIAS_ACCESO.find(c => c.id === catId)?.label.toUpperCase()) : 'VISITA',
@@ -442,7 +457,7 @@
 
                                     {step === 2 && (
                                         <div className="space-y-4 font-black">
-                                            <p className="text-xs uppercase text-slate-500 font-black">Escaneo de Identificación</p>
+                                            <p className="text-xs uppercase text-slate-500 font-black font-black">Pulse para escanear INE</p>
                                             <button onClick={() => { initAudioContext(); setScanning(true); }} className="w-24 h-24 mx-auto bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform font-black font-black">
                                                 <Icon name="camera" className="w-12 h-12 font-black font-black" />
                                             </button>
@@ -456,17 +471,17 @@
                                                 <input className={`w-full p-4 rounded-xl border-2 font-black uppercase text-center font-black ${isManual ? 'border-blue-500 bg-white' : 'border-slate-100 bg-slate-50'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
                                             </div>
                                             {photo && <img src={photo} className="w-full h-44 object-cover rounded-[2rem] border shadow-inner font-black" alt="Recorte" />}
-                                            <div className="flex justify-between px-2 font-black font-black">
-                                                <button onClick={() => setScanning(true)} className="text-blue-600 text-[11px] font-black underline uppercase">Reintentar</button>
-                                                <button onClick={() => setIsManual(true)} className="text-slate-400 text-[11px] font-black underline uppercase">Editar</button>
+                                            <div className="flex justify-between px-2 font-black font-black font-black">
+                                                <button onClick={() => setScanning(true)} className="text-blue-600 text-[11px] font-black underline uppercase font-black font-black">Reintentar</button>
+                                                <button onClick={() => setIsManual(true)} className="text-slate-400 text-[11px] font-black underline uppercase font-black font-black">Editar</button>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="flex gap-3 pt-2 font-black">
-                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-xl font-black uppercase text-xs font-black">Atrás</button>
+                                    <div className="flex gap-3 pt-2 font-black font-black font-black font-black">
+                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-xl font-black uppercase text-xs font-black font-black font-black">Atrás</button>
                                         {step === 3 && (
-                                            <button onClick={() => handleSaveVisitor(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs shadow-lg font-black">Autorizar</button>
+                                            <button onClick={() => handleSaveVisitor(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs shadow-lg font-black font-black font-black">Autorizar</button>
                                         )}
                                     </div>
                                 </div>
@@ -493,18 +508,18 @@
                     </div>
                     <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 min-h-[500px] font-black font-black">
                         <h2 className="text-xl uppercase text-slate-800 mb-6 font-black">{tab}</h2>
-                        <div className="overflow-x-auto rounded-3xl border border-slate-100">
-                            <table className="w-full text-left text-sm font-black">
+                        <div className="overflow-x-auto rounded-3xl border border-slate-100 font-black font-black font-black font-black">
+                            <table className="w-full text-left text-sm font-black font-black font-black font-black">
                                 <thead className="bg-slate-50 uppercase text-[10px] text-slate-400 border-b">
-                                    <tr><th className="px-4 py-4 font-black font-black">Sujeto</th><th className="px-4 font-black">Lote</th><th className="text-right pr-6 font-black">Acción</th></tr>
+                                    <tr><th className="px-4 py-4 font-black font-black">Sujeto</th><th className="px-4 font-black">Lote</th><th className="text-right pr-6 font-black font-black">Acción</th></tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-50 font-black">
+                                <tbody className="divide-y divide-slate-50 font-black font-black font-black font-black">
                                     {(tab==='bitacora' ? displayLogs : habitantes).sort((a,b)=> (b.timestamp || "").localeCompare(a.timestamp || "")).map(x => (
                                         <tr key={x.id} className="border-b">
-                                            <td className="px-4 py-4 font-black font-black">{x.visitante || x.nombre}</td>
-                                            <td className="px-4 py-4 text-slate-500 uppercase text-xs font-black">{x.lote || x.casa || 'N/A'}</td>
+                                            <td className="px-4 py-4 font-black font-black font-black font-black">{x.visitante || x.nombre}</td>
+                                            <td className="px-4 py-4 text-slate-500 uppercase text-xs font-black font-black font-black font-black">{x.lote || x.casa || 'N/A'}</td>
                                             <td className="px-4 py-4 text-right pr-6 font-black">
-                                                {x.fotoINE && <button onClick={() => setSelectedPhoto(x.fotoINE)} className="p-2 text-blue-600 font-black font-black font-black font-black font-black font-black"><Icon name="image" /></button>}
+                                                {x.fotoINE && <button onClick={() => setSelectedPhoto(x.fotoINE)} className="p-2 text-blue-600 font-black font-black font-black font-black font-black font-black font-black font-black"><Icon name="image" /></button>}
                                             </td>
                                         </tr>
                                     ))}
@@ -513,16 +528,16 @@
                         </div>
                     </div>
                     {selectedPhoto && (
-                        <div className="fixed inset-0 bg-black/95 z-[700] flex flex-col items-center justify-center p-6 backdrop-blur-md font-black" onClick={() => setSelectedPhoto(null)}>
-                            <img src={selectedPhoto} className="max-w-full max-h-[85vh] rounded-3xl shadow-2xl font-black" />
-                            <button className="mt-8 px-10 py-3 bg-white text-black rounded-full font-black uppercase text-sm font-black">Cerrar</button>
+                        <div className="fixed inset-0 bg-black/95 z-[700] flex flex-col items-center justify-center p-6 backdrop-blur-md font-black font-black font-black font-black font-black" onClick={() => setSelectedPhoto(null)}>
+                            <img src={selectedPhoto} className="max-w-full max-h-[85vh] rounded-3xl shadow-2xl font-black font-black font-black font-black font-black font-black" />
+                            <button className="mt-8 px-10 py-3 bg-white text-black rounded-full font-black uppercase text-sm font-black font-black font-black font-black font-black font-black">Cerrar</button>
                         </div>
                     )}
                 </div>
             );
         }
 
-        // --- Componente Principal ---
+        // --- App Principal ---
         function App() {
             const [showSplash, setShowSplash] = useState(true);
             const [role, setRole] = useState(null);
@@ -558,7 +573,7 @@
                         else {
                             const g = agentes.find(ga => ga.nombre === formattedName && ga.password === pass);
                             if (g) { setActiveUser(g); setRole('guardia'); }
-                            else { alert("Acceso denegado"); }
+                            else { alert("Credenciales incorrectas"); }
                         }
                     }
                 }
@@ -566,39 +581,39 @@
 
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white font-black">
-                    <div className="p-8 bg-blue-600 rounded-[3rem] animate-pulse mb-6"><Icon name="shield" className="w-16 h-16 font-black" /></div>
-                    <h1 className="text-3xl uppercase tracking-tighter text-center px-4 font-black">{TITULO_SISTEMA}</h1>
-                    <p className="mt-2 text-[10px] uppercase font-black tracking-widest text-white/40">{VERSION}</p>
+                    <div className="p-8 bg-blue-600 rounded-[3rem] animate-pulse mb-6 font-black font-black font-black font-black font-black font-black font-black font-black"><Icon name="shield" className="w-16 h-16 font-black font-black font-black font-black font-black font-black font-black" /></div>
+                    <h1 className="text-3xl font-black uppercase tracking-tighter text-center px-4 font-black font-black font-black font-black font-black font-black font-black">{TITULO_SISTEMA}</h1>
+                    <p className="mt-2 text-[10px] uppercase font-black tracking-widest text-white/40 font-black font-black font-black font-black font-black font-black font-black">{VERSION}</p>
                 </div>
             );
 
             if (!activeUser) return (
-                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black">
-                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden font-black font-black">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900 font-black"></div>
-                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800 font-black" />
-                        <h2 className="text-2xl mb-6 uppercase tracking-tighter font-black">{TITULO_SISTEMA}</h2>
-                        <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left font-black font-black">
-                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none font-black font-black" placeholder="Nombre de Usuario" required />
+                <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900 font-black font-black font-black font-black font-black font-black font-black"></div>
+                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800 font-black font-black font-black font-black font-black font-black font-black font-black font-black" />
+                        <h2 className="text-2xl mb-6 uppercase tracking-tighter font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">{TITULO_SISTEMA}</h2>
+                        <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left font-black font-black font-black font-black font-black font-black font-black font-black">
+                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black" placeholder="Nombre de Usuario" required />
                             <PasswordInput placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
-                            <button onClick={initAudioContext} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase shadow-lg font-black mt-2 font-black font-black font-black font-black">INGRESAR</button>
+                            <button onClick={initAudioContext} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase shadow-lg font-black mt-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">INGRESAR</button>
                         </form>
                     </div>
                 </div>
             );
 
             return (
-                <div className="h-full flex flex-col bg-slate-50 font-black font-black font-black">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black font-black">
-                        <div className="flex items-center gap-2">
-                            <Icon name="shield" className="w-6 h-6 text-blue-400 font-black font-black font-black" />
-                            <span className="text-[11px] uppercase tracking-tighter font-black font-black">{TITULO_SISTEMA}</span>
+                <div className="h-full flex flex-col bg-slate-50 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                        <div className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
+                            <Icon name="shield" className="w-6 h-6 text-blue-400 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black" />
+                            <span className="text-[11px] uppercase tracking-tighter font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">{TITULO_SISTEMA}</span>
                         </div>
-                        <button onClick={() => { setRole(null); setActiveUser(null); }} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase font-black font-black font-black">SALIR</button>
+                        <button onClick={() => { setRole(null); setActiveUser(null); }} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">SALIR</button>
                     </header>
-                    <main className="flex-1 overflow-y-auto font-black font-black font-black">
+                    <main className="flex-1 overflow-y-auto font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">
                         {(role === 'admin' || role === 'superuser') && <AdminDashboard habitantes={habitantes} logs={logs} role={role} />}
-                        {role === 'habitante' && <div className="p-6 text-center font-black"><h1 className="text-xl font-black mb-2 uppercase font-black font-black">Hola {activeUser.nombre}</h1><p className="text-slate-400 text-sm font-black font-black font-black font-black">Tu cuenta está activa.</p></div>}
+                        {role === 'habitante' && <div className="p-6 text-center font-black font-black font-black"><h1 className="text-xl font-black mb-2 uppercase font-black font-black font-black">Hola {activeUser.nombre}</h1><p className="text-slate-400 text-sm font-black font-black font-black font-black font-black font-black">Tu cuenta está activa.</p></div>}
                         {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
                     </main>
                 </div>
