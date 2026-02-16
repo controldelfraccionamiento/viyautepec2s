@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Viyautepec 2a Sección - Ver. 10.2</title>
+    <title>Viyautepec 2a Sección - Ver. 10.3</title>
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -45,13 +45,13 @@
             width: 85vw; height: calc(85vw * 0.63);
             max-width: 440px; max-height: 278px;
             position: relative; border-radius: 16px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 2px solid rgba(255, 255, 255, 0.6);
         }
         .scanner-guide-qr {
             width: 65vw; height: 65vw; max-width: 280px; max-height: 280px;
             position: relative; border-radius: 24px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
             border: 3px solid #3b82f6;
         }
         .scanner-corner { position: absolute; width: 25px; height: 25px; border: 5px solid #3b82f6; }
@@ -71,7 +71,6 @@
         }
         .detecting .ring-circle { stroke-dashoffset: 0; }
 
-        /* Keyboard Adjustment */
         .keyboard-aware-modal {
             display: flex; flex-direction: column; justify-content: flex-end; 
             min-height: 100dvh; padding: 16px; overflow-y: auto;
@@ -117,7 +116,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "viyautepec2seccion";
-        const VERSION = "Ver. 10.2";
+        const VERSION = "Ver. 10.3";
         const TITULO_SISTEMA = "Viyautepec 2a Sección";
 
         const CATEGORIAS_ACCESO = [
@@ -205,7 +204,7 @@
                         requestRef.current = requestAnimationFrame(scanQR);
                     }
                 })
-                .catch(() => { alert("Acceso a cámara denegado"); onCancel(); });
+                .catch(() => { alert("Error cámara"); onCancel(); });
                 return () => {
                     if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop());
                     cancelAnimationFrame(requestRef.current);
@@ -289,7 +288,7 @@
                     const name = nameIdx !== -1 ? lines.slice(nameIdx + 1, nameIdx + 4).join(' ') : "No detectado";
                     onCapture({ img: fullImg, name });
                 } catch (e) {
-                    onCapture({ img: fullImg, name: "Revisar Manualmente" });
+                    onCapture({ img: fullImg, name: "Revisar Manual" });
                 }
             };
 
@@ -301,7 +300,7 @@
                         <div ref={guideRef} className={mode === 'QR' ? "scanner-guide-qr" : "scanner-guide"}>
                             <div className="scanner-corner c-tl"></div><div className="scanner-corner c-tr"></div>
                             <div className="scanner-corner c-bl"></div><div className="scanner-corner c-br"></div>
-                            {isSteady && mode === 'INE' && <div className="auto-capture-ring detecting"><svg width="120" height="120" style={{transform: 'rotate(-90deg)'}}><circle className="ring-circle" cx="70" cy="70" r="60" /></svg></div>}
+                            {isSteady && mode === 'INE' && <div className="auto-capture-ring detecting"><svg width="140" height="140" style={{transform: 'rotate(-90deg)'}}><circle className="ring-circle" cx="70" cy="70" r="60" /></svg></div>}
                         </div>
                     </div>
                     <div className="absolute top-12 w-full text-center px-4 font-black">
@@ -384,7 +383,7 @@
                 <div className="p-4 space-y-4 font-black">
                     <div className="flex gap-2 overflow-x-auto pb-2 no-print">
                         {['residentes', 'guardias', 'bitacora', (isMaestro && 'administradores')].filter(Boolean).map(t => (
-                            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] uppercase font-black transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'}`}>{t}</button>
+                            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-[10px] uppercase font-black transition-all whitespace-nowrap ${tab === t ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>{t}</button>
                         ))}
                     </div>
 
@@ -401,18 +400,35 @@
                             <div className="overflow-x-auto rounded-3xl border border-slate-100">
                                 <table className="w-full text-left text-sm font-black">
                                     <thead className="bg-slate-50 uppercase text-[9px] text-slate-400 border-b">
-                                        <tr><th className="px-6 py-4">Sujeto</th><th className="px-6">Info</th><th className="text-right pr-10">Acción</th></tr>
+                                        <tr>
+                                            <th className="px-6 py-4">{tab === 'bitacora' ? 'Guardia' : 'Sujeto'}</th>
+                                            <th className="px-6">{tab === 'bitacora' ? 'Sujeto / Info' : 'Info'}</th>
+                                            <th className="text-right pr-10">Acción</th>
+                                        </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {(tab==='bitacora' ? displayLogs : tab==='residentes' ? habitantes : tab==='guardias' ? agentes : filteredAdmins).sort((a,b)=> (b.timestamp || "").localeCompare(a.timestamp || "")).map(x => (
                                             <tr key={x.id} className={`border-b ${x.tipo === 'Acceso Denegado' ? 'bg-rose-50/30' : ''}`}>
-                                                <td className="px-6 py-4 font-black">
-                                                    <div className="flex items-center gap-2">
-                                                        {x.tipo === 'Acceso Denegado' && <span className="text-rose-600 font-black"><Icon name="x-circle" className="w-4 h-4 font-black" /></span>}
-                                                        {x.visitante || x.nombre || x.habitanteNombre}
+                                                <td className="px-6 py-4 font-black leading-tight">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2">
+                                                            {x.tipo === 'Acceso Denegado' && <span className="text-rose-600 font-black"><Icon name="x-circle" className="w-4 h-4 font-black" /></span>}
+                                                            {tab === 'bitacora' ? (x.autor || "Sistema") : (x.visitante || x.nombre || x.habitanteNombre)}
+                                                        </div>
+                                                        {tab === 'bitacora' && <span className="text-[8px] text-blue-500 uppercase">{x.metodo || 'INE'}</span>}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-500 uppercase text-xs font-black">{x.casa || x.lote || (x.esMaestro ? 'MAESTRO' : 'AUXILIAR')}</td>
+                                                <td className="px-6 py-4 text-slate-500 uppercase text-xs font-black leading-tight">
+                                                    {tab === 'bitacora' ? (
+                                                        <>
+                                                            <span className="text-slate-900">{x.visitante || x.habitanteNombre}</span>
+                                                            <br/>
+                                                            <span className="text-[9px] opacity-70">LOTE: {x.casa || x.lote || 'N/A'}</span>
+                                                        </>
+                                                    ) : (
+                                                        x.casa || x.lote || (x.esMaestro ? 'MAESTRO' : 'AUXILIAR')
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 text-right pr-10 flex justify-end gap-1">
                                                     {(x.fotoINE || x.foto) && <button onClick={() => setSelectedPhoto(x.fotoINE || x.foto)} className="p-2 text-blue-600 font-black"><Icon name="image" className="w-4 h-4 font-black"/></button>}
                                                     {tab !== 'bitacora' && <button onClick={() => deleteEntry(tab === 'residentes' ? 'habitantes' : (tab === 'guardias' ? 'agentes' : 'admins'), x.id, x.nombre)} className="p-2 text-rose-500 font-black"><Icon name="trash" className="w-4 h-4 font-black"/></button>}
@@ -445,12 +461,12 @@
         function HabitanteModule({ habitante }) {
             return (
                 <div className="max-w-md mx-auto py-4 space-y-6 animate-fade-in">
-                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden font-black font-black">
+                    <div className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-slate-100 text-center relative overflow-hidden font-black">
                         <div className="absolute top-0 left-0 w-full h-3 bg-blue-600 font-black"></div>
                         <h2 className="text-2xl uppercase mb-6 mt-2 tracking-tighter text-slate-900">Pase Residencial</h2>
                         <img src={getQRCodeURL(habitante.id)} className="w-48 h-48 mx-auto mb-6 shadow-sm rounded-2xl border-8 border-slate-50" alt="QR" />
                         <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 w-full shadow-inner">
-                            <span className="text-[9px] uppercase text-slate-400 block mb-1 tracking-widest">ID de Acceso</span>
+                            <span className="text-[9px] uppercase text-slate-400 block mb-1 tracking-widest font-black">ID de Acceso</span>
                             <p className="font-black text-blue-600 text-xl tracking-[0.2em] uppercase leading-none">{habitante.id.slice(0,8).toUpperCase()}</p>
                         </div>
                     </div>
@@ -478,12 +494,13 @@
                         lote: resident.casa,
                         timestamp: new Date().toISOString(),
                         autor: agente.nombre,
+                        autorRole: 'GUARDIA',
                         metodo: 'QR'
                     });
                     alert(`Acceso Registrado: ${resident.nombre}`);
                     setFlowMode(null);
                 } else {
-                    alert("QR inválido.");
+                    alert("QR no válido.");
                 }
                 setScanning(false);
             };
@@ -504,6 +521,7 @@
                     lote: selected.casa,
                     timestamp: new Date().toISOString(),
                     autor: agente.nombre,
+                    autorRole: 'GUARDIA',
                     fotoINE: photo || ''
                 });
                 setSelected(null); setStep(1); setVName(""); setPhoto(null); setFlowMode(null);
@@ -533,16 +551,16 @@
 
             return (
                 <div className="p-4 space-y-4 font-black">
-                    <button onClick={() => setFlowMode(null)} className="text-slate-400 text-[10px] mb-2 uppercase font-black font-black">← Menú Principal</button>
+                    <button onClick={() => setFlowMode(null)} className="text-slate-400 text-[10px] mb-2 uppercase font-black">← Volver</button>
                     <div className="bg-white p-4 rounded-2xl shadow-sm flex items-center gap-3 border border-slate-200">
                         <Icon name="search" className="text-slate-400 w-6 h-6" />
-                        <input className="flex-1 outline-none text-lg font-black" placeholder="Buscar residente..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input className="flex-1 outline-none text-lg font-black" placeholder="Buscar residente o lote..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <div className="grid gap-4">
                         {list.map(h => (
-                            <div key={h.id} className="bg-white p-5 rounded-3xl shadow-md border-t-8 border-slate-800 font-black">
+                            <div key={h.id} className="bg-white p-5 rounded-3xl shadow-md border-t-8 border-slate-800">
                                 <h3 className="text-lg uppercase mb-1 font-black">{h.nombre}</h3>
-                                <p className="text-blue-600 mb-4 font-black text-sm font-black">LOTE: {h.casa}</p>
+                                <p className="text-blue-600 mb-4 font-black text-sm">LOTE: {h.casa}</p>
                                 <button onClick={() => setSelected(h)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-xs">REGISTRAR VISITA</button>
                             </div>
                         ))}
@@ -552,15 +570,15 @@
                         <div className="fixed inset-0 bg-slate-950/90 z-[500] overflow-y-auto">
                             <div className="keyboard-aware-modal w-full max-w-md mx-auto font-black font-black">
                                 <div className="bg-white p-6 sm:p-8 rounded-[3rem] w-full space-y-6 text-center shadow-2xl border border-slate-100 font-black">
-                                    <h2 className="text-xl font-black uppercase font-black">Registro de Visita</h2>
+                                    <h2 className="text-xl font-black uppercase">Registro de Visita</h2>
                                     <div className="p-4 bg-slate-100 rounded-[2.5rem]">
-                                        <p className="font-black text-lg uppercase font-black font-black">{selected.nombre}</p>
+                                        <p className="font-black text-lg uppercase font-black">{selected.nombre}</p>
                                         <p className="text-blue-600 font-black text-[11px] uppercase tracking-widest font-black">LOTE {selected.casa}</p>
                                     </div>
                                     
                                     {step === 1 && (
-                                        <div className="space-y-6 font-black font-black">
-                                            <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest font-black">Seleccione Categoría</p>
+                                        <div className="space-y-6">
+                                            <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest">Seleccione Categoría</p>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {CATEGORIAS_ACCESO.map(cat => {
                                                     const allowed = selected[`permiso_${cat.id}`] !== false;
@@ -568,11 +586,11 @@
                                                         <button key={cat.id} onClick={() => { setCatId(cat.id); setStep(2); }}
                                                             className={`flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all relative ${allowed ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'}`}
                                                         >
-                                                            <div className={`p-3 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black font-black`}>
-                                                                <Icon name={cat.icon} className="w-8 h-8 font-black font-black" />
-                                                                {!allowed && <div className="diagonal-strike font-black font-black">BLOQUEADO</div>}
+                                                            <div className={`p-3 rounded-2xl bg-${cat.color}-100 text-${cat.color}-600 font-black`}>
+                                                                <Icon name={cat.icon} className="w-8 h-8 font-black" />
+                                                                {!allowed && <div className="diagonal-strike">BLOQUEADO</div>}
                                                             </div>
-                                                            <span className="text-[9px] uppercase mt-2 font-black font-black">{cat.label}</span>
+                                                            <span className="text-[9px] uppercase mt-2 font-black">{cat.label}</span>
                                                         </button>
                                                     );
                                                 })}
@@ -582,31 +600,31 @@
 
                                     {step === 2 && (
                                         <div className="space-y-4 font-black">
-                                            <p className="text-xs uppercase text-slate-500 font-black font-black font-black">Escaneo de Identificación</p>
+                                            <p className="text-xs uppercase text-slate-500 font-black font-black">Escaneo de Identificación</p>
                                             <button onClick={() => { initAudioContext(); setScanning(true); }} className="w-24 h-24 mx-auto bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-                                                <Icon name="camera" className="w-12 h-12 font-black font-black" />
+                                                <Icon name="camera" className="w-12 h-12" />
                                             </button>
                                         </div>
                                     )}
 
                                     {step === 3 && (
-                                        <div className="space-y-4 text-left font-black font-black">
+                                        <div className="space-y-4 text-left">
                                             <div>
                                                 <label className="text-[10px] uppercase text-slate-400 ml-2 font-black">Nombre del Visitante</label>
                                                 <input className={`w-full p-4 rounded-2xl border-2 font-black uppercase text-center ${isManual ? 'border-blue-500 bg-white' : 'border-slate-100 bg-slate-50'}`} value={vName} onChange={e => setVName(e.target.value)} disabled={!isManual} />
                                             </div>
                                             {photo && <img src={photo} className="w-full h-44 object-cover rounded-[2rem] border shadow-inner" alt="Recorte" />}
-                                            <div className="flex justify-between px-2 font-black font-black">
-                                                <button onClick={() => setScanning(true)} className="text-blue-600 text-[11px] font-black underline uppercase font-black font-black">Reintentar</button>
-                                                <button onClick={() => setIsManual(true)} className="text-slate-400 text-[11px] font-black underline uppercase font-black font-black">Editar</button>
+                                            <div className="flex justify-between px-2">
+                                                <button onClick={() => setScanning(true)} className="text-blue-600 text-[11px] font-black underline uppercase">Reintentar</button>
+                                                <button onClick={() => setIsManual(true)} className="text-slate-400 text-[11px] font-black underline uppercase">Editar</button>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="flex gap-3 pt-2 font-black font-black">
-                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-xl font-black uppercase text-xs">Atrás</button>
+                                    <div className="flex gap-3 pt-2">
+                                        <button onClick={() => { if(step > 1) setStep(step - 1); else setSelected(null); }} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase text-xs">Atrás</button>
                                         {step === 3 && (
-                                            <button onClick={() => saveVisitorAccess(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs shadow-lg font-black font-black font-black">Autorizar</button>
+                                            <button onClick={() => saveVisitorAccess(true)} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg font-black">Autorizar</button>
                                         )}
                                     </div>
                                 </div>
@@ -618,10 +636,10 @@
             );
         }
 
-        // --- App Principal ---
+        // --- App Component ---
         function App() {
             const [showSplash, setShowSplash] = useState(true);
-            const [role, setRole] = useState(null);
+            const [role, setRole] = useState(null); 
             const [activeUser, setActiveUser] = useState(null);
             const [habitantes, setHabitantes] = useState([]);
             const [agentes, setAgentes] = useState([]);
@@ -662,20 +680,20 @@
 
             if (showSplash) return (
                 <div className="fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center text-white font-black">
-                    <div className="p-8 bg-blue-600 rounded-[3rem] animate-pulse mb-6 font-black font-black font-black"><Icon name="shield" className="w-16 h-16" /></div>
-                    <h1 className="text-3xl font-black uppercase tracking-tighter text-center px-4">{TITULO_SISTEMA}</h1>
+                    <div className="p-8 bg-blue-600 rounded-[3rem] animate-pulse mb-6"><Icon name="shield" className="w-16 h-16 font-black" /></div>
+                    <h1 className="text-3xl font-black uppercase tracking-tighter text-center px-4 font-black">{TITULO_SISTEMA}</h1>
                     <p className="mt-2 text-[10px] uppercase font-black tracking-widest text-white/40">{VERSION}</p>
                 </div>
             );
 
             if (!activeUser) return (
                 <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-screen font-black font-black">
-                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden font-black">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900"></div>
-                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800" />
-                        <h2 className="text-2xl mb-6 uppercase tracking-tighter">{TITULO_SISTEMA}</h2>
+                    <div className="bg-white p-10 rounded-[4rem] shadow-2xl w-full max-w-sm text-center border border-slate-100 relative overflow-hidden font-black font-black">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-slate-900 font-black font-black"></div>
+                        <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-800 font-black font-black font-black font-black font-black font-black" />
+                        <h2 className="text-2xl mb-6 uppercase tracking-tighter font-black font-black font-black font-black">{TITULO_SISTEMA}</h2>
                         <form onSubmit={e => { e.preventDefault(); handleLogin(e.target.name.value, loginPass); }} className="space-y-4 text-left font-black font-black">
-                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none font-black font-black" placeholder="Usuario" required />
+                            <input name="name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none font-black font-black" placeholder="Nombre de Usuario" required />
                             <PasswordInput placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
                             <button onClick={initAudioContext} className="w-full py-4 bg-slate-900 text-white rounded-2xl uppercase shadow-lg font-black mt-2 font-black font-black">INGRESAR</button>
                         </form>
@@ -685,25 +703,15 @@
 
             return (
                 <div className="h-full flex flex-col bg-slate-50 font-black font-black">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black">
-                        <div className="flex items-center gap-2">
-                            <Icon name="shield" className="w-6 h-6 text-blue-400 font-black" />
-                            <span className="text-[11px] uppercase tracking-tighter">{TITULO_SISTEMA}</span>
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg shrink-0 font-black font-black">
+                        <div className="flex items-center gap-2 font-black font-black">
+                            <Icon name="shield" className="w-6 h-6 text-blue-400 font-black font-black" />
+                            <span className="text-[11px] uppercase tracking-tighter font-black font-black">{TITULO_SISTEMA}</span>
                         </div>
-                        <button onClick={resetSession} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase font-black">SALIR</button>
+                        <button onClick={resetSession} className="text-[9px] bg-white/10 px-3 py-1.5 rounded-lg font-black uppercase font-black font-black">SALIR</button>
                     </header>
-                    <main className="flex-1 overflow-y-auto font-black">
-                        {(role === 'admin' || role === 'superuser') && 
-                            <AdminView 
-                                habitantes={habitantes} 
-                                agentes={agentes} 
-                                logs={logs} 
-                                admins={admins} 
-                                role={role} 
-                                activeUser={activeUser} 
-                                onReset={resetSession}
-                            />
-                        }
+                    <main className="flex-1 overflow-y-auto font-black font-black">
+                        {(role === 'admin' || role === 'superuser') && <AdminView habitantes={habitantes} agentes={agentes} logs={logs} admins={admins} role={role} activeUser={activeUser} onReset={resetSession} />}
                         {role === 'habitante' && <HabitanteModule habitante={activeUser} />}
                         {role === 'guardia' && <GuardiaFlow agente={activeUser} habitantes={habitantes} />}
                     </main>
